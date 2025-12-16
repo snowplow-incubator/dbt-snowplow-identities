@@ -1,0 +1,11 @@
+version: 2
+
+macros:
+  - name: allow_refresh
+    description: '{{ doc("macro_allow_refresh") }}'
+  - name: get_cluster_by_values
+    description: '{{ doc("macro_get_cluster_by_values") }}'
+    arguments:
+      - name: model
+        type: string
+        description: Short name of model to select which fields to cluster by

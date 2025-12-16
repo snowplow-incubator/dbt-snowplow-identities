@@ -1,0 +1,10 @@
+version: 2
+
+# Example tests for equality:
+# models:
+#   - name: snowplow_unified_base_quarantined_sessions_actual
+#     tests:
+#       - dbt_utils.equal_rowcount:
+#           compare_model: ref('snowplow_unified_base_quarantined_sessions_expected_stg')
+#       - dbt_utils.equality:
+#           compare_model: ref('snowplow_unified_base_quarantined_sessions_expected_stg')
