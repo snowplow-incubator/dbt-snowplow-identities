@@ -23,25 +23,25 @@ fi
 
 for db in ${DATABASES[@]}; do
 
-  echo "<YOUR PACKAGE NAME> integration tests: Seeding data"
+  echo "snowplow-identitiesintegration tests: Seeding data"
   eval "dbt seed --full-refresh --target $db" || exit 1;
 
-  echo "<YOUR PACKAGE NAME> integration tests: Try run without data"
+  echo "snowplow-identitiesintegration tests: Try run without data"
   eval "dbt run --full-refresh --vars '{snowplow__allow_refresh: true, snowplow__backfill_limit_days: 1, snowplow__start_date: 2010-01-01}' --target $db" || exit 1;
 
-  echo "<YOUR PACKAGE NAME> integration tests: Execute models - run 1/4"
+  echo "snowplow-identitiesintegration tests: Execute models - run 1/4"
   eval "dbt run --full-refresh --vars '{snowplow__allow_refresh: true, snowplow__backfill_limit_days: 243}' --target $db" || exit 1;
 
   for i in {2..4}
   do
-    echo "<YOUR PACKAGE NAME> integration tests: Execute models - run $i/4"
+    echo "snowplow-identitiesintegration tests: Execute models - run $i/4"
     eval "dbt run --target $db" || exit 1;
   done
 
-  echo "<YOUR PACKAGE NAME> integration tests: Test models"
+  echo "snowplow-identitiesintegration tests: Test models"
 
   eval "dbt test test_name:not_null --store-failures --target $db" || exit 1;
 
-  echo "<YOUR PACKAGE NAME> integration tests: All tests passed"
+  echo "snowplow-identitiesintegration tests: All tests passed"
 
 done

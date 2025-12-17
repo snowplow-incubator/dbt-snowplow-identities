@@ -8,13 +8,12 @@ name: Release
 #####
 
 on:
-  workflow_dispatch:
-  # push:
-  #   branches:
-  #     - main
+  push:
+    branches:
+      - main
 
 env:
-  package_name: <YOUR PACKAGE NAME>
+  package_name: snowplow_identities
 
 jobs:
   version_check:

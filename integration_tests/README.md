@@ -1,12 +1,12 @@
-# <YOUR PACKAGE NAME>-integration-tests
+# snowplow_identities-integration-tests
 
-Integration test suite for the <YOUR PACKAGE NAME> dbt package.
+Integration test suite for the snowplow-identitiesdbt package.
 
 The `./scripts` directory contains the following:
 
-- `integration_tests.sh`: This tests the standard modules of the <YOUR PACKAGE NAME> package:
+- `integration_tests.sh`: This tests the standard modules of the snowplow-identitiespackage:
 
-- Runs the <YOUR PACKAGE NAME> package 4 times to replicate incremental loading of events, then performs an equality test between the actual vs expected output.
+- Runs the snowplow-identitiespackage 4 times to replicate incremental loading of events, then performs an equality test between the actual vs expected output.
 
 Run the scripts using:
 

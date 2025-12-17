@@ -1,0 +1,20 @@
+version: 2
+
+snapshots:
+  - name: snowplow_identities_id_mapping_snapshot
+    description: '{{ doc("snapshot_snowplow_identities_id_mapping_snapshot") }}'
+    columns:
+      - name: snowplow_id
+        description: 'A Snowplow ID that has been mapped to a canonical active_snowplow_id.'
+      - name: active_snowplow_id
+        description: 'The canonical parent ID after considering all merges.'
+      - name: updated_at
+        description: 'Event time - when the merge actually occurred in the real world (from merge event timestamp).'
+      - name: model_tstamp
+        description: 'Processing time - when dbt loaded this record. Useful for late-arrival detection and pipeline monitoring.'
+      - name: dbt_valid_from
+        description: 'When this version of the mapping became active (based on updated_at).'
+      - name: dbt_valid_to
+        description: 'When this version was superseded by a new mapping (NULL if still current).'
+      - name: dbt_updated_at
+        description: 'Copy of updated_at used by dbt snapshot strategy for change detection.'

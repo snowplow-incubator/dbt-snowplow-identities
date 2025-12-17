@@ -1,0 +1,28 @@
+version: 2
+
+models:
+  - name: snowplow_identities_new_identities
+    description: '{{ doc("table_new_identities") }}'
+    columns:
+      - name: snowplow_id
+        description: 'The active snowplow_id associated with the incoming event. It may have already been merged since then.'
+        tests:
+          - not_null
+          - unique
+      - name: created_at
+        description: 'The identity creation timestamp of the given snowplow_id taken from the identity context.'
+      - name: triggering_event_id
+        description: 'The event_id of the first event belonging to a snowplow_id in a given run which may have caused the identitiy to be created unless earlier modelled records exist in the new_identities table.'
+      - name: domain_userid
+        description: 'The domain_userid from the first event associated with this snowplow_id. Optional, dictated by var("snowplow__identifiers").'
+      - name: user_id
+        description: 'The user_id from the first event associated with this snowplow_id. Optional, dictated by var("snowplow__identifiers").'
+      - name: first_app_id
+      - name: first_app_id
+        description: 'The app_id from the first event associated with this snowplow_id.'
+      - name: last_app_id
+        description: 'The app_id from the last event associated with this snowplow_id.'
+      - name: first_derived_tstamp
+        description: 'The derived_tstamp from the first event associated with this snowplow_id.'
+      - name: last_derived_tstamp
+        description: 'The derived_tstamp from the last event associated with this snowplow_id.'
