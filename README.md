@@ -1,8 +1,6 @@
 [![early-release]][tracker-classification]
 [![Release][release-image]][releases]
 [![License][license-image]][license]
-[![Discourse posts][discourse-image]][discourse]
-
 ![snowplow-logo](https://raw.githubusercontent.com/snowplow/dbt-snowplow-utils/main/assets/snowplow_logo.png)
 
 # snowplow-identities
