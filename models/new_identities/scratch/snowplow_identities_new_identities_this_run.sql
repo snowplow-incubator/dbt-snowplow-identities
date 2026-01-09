@@ -18,6 +18,7 @@ with prep as (
         e.collector_tstamp
     from {{ ref('snowplow_identities_base_events_this_run') }} e,
     UNNEST(contexts_com_snowplowanalytics_snowplow_identity_1) as c
+    where e.contexts_com_snowplowanalytics_snowplow_identity_1 is not null
     QUALIFY row_number() over (partition by event_id order by collector_tstamp) = 1
 )
 

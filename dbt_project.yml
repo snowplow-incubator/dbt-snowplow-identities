@@ -62,6 +62,7 @@ vars:
     snowplow__app_id: [] # List of app_ids to filter events on. Empty list means no filtering.
     snowplow__hash_identifiers: false # Set to true to hash identifiers before processing (recommended for PII compliance)
     snowplow__identifiers: [{'reference': 'domain_userid', 'alias': 'domain_userid'}, {'reference': 'user_id', 'alias': 'user_id'}] # List of identifiers to process.
+    snowplow__backfill_limit_days: 30
     
     # WAREHOUSE & TRACKER
     snowplow__databricks_catalog: "hive_metastore"

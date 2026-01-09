@@ -59,7 +59,7 @@ models:
           - unique
       - name: active_snowplow_id
         description: 'The current, canonical snowplow_id after considering all merges .'
-      - name: updated_at
+      - name: merged_at
         description: 'The timestamp when the identifier was merged.'
       - name: model_tstamp
         description: 'The timestamp when this record was created in the model.'

@@ -35,6 +35,6 @@ deduplicated AS (
 SELECT 
     d.snowplow_id,
     d.active_snowplow_id,
-    d.merged_at AS updated_at,
+    d.merged_at,
     {{ snowplow_utils.current_timestamp_in_utc() }} as model_tstamp
 FROM deduplicated d
