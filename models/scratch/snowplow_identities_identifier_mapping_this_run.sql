@@ -17,9 +17,9 @@ You may obtain a copy of the Snowplow Personal and Academic License Version 1.0 
 
 -- Step 1: Get new identifiers from new identities in this run
 with prep as (
-    SELECT 
-        snowplow_id, 
-        col_name AS id_type, 
+    SELECT
+        snowplow_id,
+        col_name AS id_type,
         {% if var('snowplow__hash_identifiers', false) %}
             to_hex(sha256(lower(trim(id)))) as id_value,
         {% else %}
@@ -28,7 +28,8 @@ with prep as (
         first_app_id,
         last_app_id,
         first_derived_tstamp,
-        last_derived_tstamp
+        last_derived_tstamp,
+        first_seen_event_id
     FROM {{ ref('snowplow_identities_new_identities_this_run') }}
     UNPIVOT(id FOR col_name IN ({{ identifier_columns | join(', ') }}))
     WHERE id IS NOT NULL
@@ -43,6 +44,7 @@ with prep as (
         last_app_id,
         first_derived_tstamp,
         last_derived_tstamp,
+        first_seen_event_id,
         {{ dbt_utils.generate_surrogate_key(['id_type', 'id_value']) }} as uuid
     from prep
 )
@@ -63,6 +65,7 @@ with prep as (
         hist.last_app_id,
         hist.first_seen_at,
         hist.last_seen_at,
+        hist.first_seen_event_id,
         hist.active_snowplow_id as snowplow_id
     from {{ this }} hist
     where hist.active_snowplow_id in (select snowplow_id from merged_ids_this_run)
@@ -82,7 +85,8 @@ with prep as (
         first_app_id,
         last_app_id,
         first_derived_tstamp as first_seen_at,
-        last_derived_tstamp as last_seen_at
+        last_derived_tstamp as last_seen_at,
+        first_seen_event_id
     from new_identifiers
 
     union all
@@ -96,7 +100,8 @@ with prep as (
         first_app_id,
         last_app_id,
         first_seen_at,
-        last_seen_at
+        last_seen_at,
+        first_seen_event_id
     from existing_identifiers_to_update
 )
 {% else %}
@@ -109,7 +114,8 @@ with prep as (
         first_app_id,
         last_app_id,
         first_derived_tstamp as first_seen_at,
-        last_derived_tstamp as last_seen_at
+        last_derived_tstamp as last_seen_at,
+        first_seen_event_id
     from new_identifiers
 )
 {% endif %}
@@ -124,6 +130,7 @@ with prep as (
         a.last_app_id,
         a.first_seen_at,
         a.last_seen_at,
+        a.first_seen_event_id,
         coalesce(id_map.active_snowplow_id, a.snowplow_id) as active_snowplow_id
     from all_identifiers a
     left join {{ ref('snowplow_identities_snowplow_id_mapping') }} id_map
@@ -143,7 +150,8 @@ with prep as (
         c.first_app_id,
         c.last_app_id,
         least(c.first_seen_at, coalesce(h.first_seen_at, c.first_seen_at)) as first_seen_at,
-        greatest(c.last_seen_at, coalesce(h.last_seen_at, c.last_seen_at)) as last_seen_at
+        greatest(c.last_seen_at, coalesce(h.last_seen_at, c.last_seen_at)) as last_seen_at,
+        coalesce(h.first_seen_event_id, c.first_seen_event_id) as first_seen_event_id
     from with_current_mapping c
     left join {{ this }} h
         on c.uuid = h.uuid
@@ -158,20 +166,22 @@ with prep as (
         any_value(first_app_id) as first_app_id,
         any_value(last_app_id) as last_app_id,
         min(first_seen_at) as first_seen_at,
-        max(last_seen_at) as last_seen_at
+        max(last_seen_at) as last_seen_at,
+        any_value(first_seen_event_id) as first_seen_event_id
     from with_historical_timestamps
     group by active_snowplow_id, id_type, id_value, uuid
 )
 
 select
+    uuid,
     active_snowplow_id,
     id_type,
     id_value,
-    uuid,
     first_app_id,
     last_app_id,
     first_seen_at,
-    last_seen_at
+    last_seen_at,
+    first_seen_event_id
 from aggregated
 {% else %}
 , aggregated as (
@@ -183,7 +193,8 @@ from aggregated
         any_value(first_app_id) as first_app_id,
         any_value(last_app_id) as last_app_id,
         min(first_seen_at) as first_seen_at,
-        max(last_seen_at) as last_seen_at
+        max(last_seen_at) as last_seen_at,
+        any_value(first_seen_event_id) as first_seen_event_id
     from with_current_mapping
     group by active_snowplow_id, id_type, id_value, uuid
 )
@@ -196,6 +207,7 @@ select
     first_app_id,
     last_app_id,
     first_seen_at,
-    last_seen_at
+    last_seen_at,
+    first_seen_event_id
 from aggregated
 {% endif %}

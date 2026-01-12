@@ -6,28 +6,30 @@ You may obtain a copy of the Snowplow Personal and Academic License Version 1.0 
 #}
 
 with id_changes as (
+    -- New identity creations
     select
         snowplow_id,
-        null as previous_snowplow_id,
-        created_at as changed_at,
-        first_derived_tstamp as triggering_event_timestamp,
+        cast(null as string) as previous_snowplow_id,
+        snowplow_id as active_snowplow_id,
+        first_derived_tstamp as effective_at,
         'created' as change_type,
-        triggering_event_id,
-        first_app_id as triggering_app_id
-        
+        first_seen_event_id,
+        first_app_id as first_seen_app_id
+
     from {{ ref('snowplow_identities_new_identities_this_run') }} e
 
     union all
 
+    -- Merge events
     select
         p.active_snowplow_id as snowplow_id,
         m.snowplow_id as previous_snowplow_id,
-        m.merged_at as changed_at,
-        NULL as triggering_event_timestamp,
+        p.active_snowplow_id as active_snowplow_id,
+        m.merged_at as effective_at,
         'merged' as change_type,
-        m.triggering_event_id,
-        n.first_app_id as triggering_app_id
-        
+        m.triggering_event_id as first_seen_event_id,
+        n.first_app_id as first_seen_app_id
+
     from {{ ref('snowplow_identities_merge_events_this_run') }} as p,
     UNNEST(p.merged) AS m
     left join {{ ref('snowplow_identities_new_identities_this_run') }} n
@@ -35,12 +37,13 @@ with id_changes as (
 )
 
 select
-    {{ dbt_utils.generate_surrogate_key(['snowplow_id', 'previous_snowplow_id']) }} as id_change_key,
+    {{ dbt_utils.generate_surrogate_key(['snowplow_id', 'previous_snowplow_id', 'effective_at']) }} as id_change_key,
     snowplow_id,
     previous_snowplow_id,
-    changed_at,
-    triggering_event_timestamp,
+    active_snowplow_id,
+    effective_at,
+    {{ snowplow_utils.current_timestamp_in_utc() }} as changed_at,
     change_type,
-    triggering_event_id,
-    triggering_app_id
+    first_seen_event_id,
+    first_seen_app_id
 from id_changes

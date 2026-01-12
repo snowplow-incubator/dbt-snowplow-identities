@@ -56,7 +56,7 @@ with prep as (
 select
     f.snowplow_id,
     f.created_at,
-    f.event_id as triggering_event_id,
+    f.event_id as first_seen_event_id,
     f.app_id as first_app_id,
     l.app_id as last_app_id,
     {% for identifier in var('snowplow__identifiers', [{'reference': 'domain_userid', 'alias': 'domain_userid'}, {'reference': 'user_id', 'alias': 'user_id'}]) %}

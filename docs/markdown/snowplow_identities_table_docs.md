@@ -46,7 +46,7 @@ This provides a simplified mapping between any previous snowplow_id and its curr
 {% enddocs %}
 
 {% docs table_id_changes %}
-A fact table that contains a complete history of all changes to snowplow ID clusters, including both merges and when new ids are created.
+A fact table that contains a complete history of all changes to snowplow ID clusters, including both merges and when new IDs are created.
 {% enddocs %}
 
 {% docs table_identifier_mapping %}
@@ -63,7 +63,19 @@ Incremental table containing first and last observed activity for a given Snowpl
 {% enddocs %}
 
 
-{% docs snapshot_snowplow_identities_id_mapping_snapshot %}
-CD Type 2 history of `snowplow_id` to `active_snowplow_id` mappings.
+{% docs table_id_mapping_scd %}
+SCD Type 2 table for identity mappings with event-time semantics.
+
+This table provides point-in-time reproducible queries for identity resolution. Unlike dbt snapshots which use processing time, this table uses event time (`effective_at`) to track when mappings actually occurred.
+
+**Point-in-Time Query Pattern:**
+```sql
+SELECT s.snowplow_id, scd.active_snowplow_id
+FROM sessions s
+JOIN snowplow_identities_id_mapping_scd scd
+  ON s.snowplow_id = scd.snowplow_id
+WHERE scd.effective_at <= @query_timestamp
+  AND (scd.superseded_at IS NULL OR scd.superseded_at > @query_timestamp)
+```
 {% enddocs %}
 

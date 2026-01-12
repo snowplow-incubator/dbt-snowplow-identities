@@ -10,20 +10,26 @@ models:
           - not_null
           - unique
       - name: snowplow_id
-        description: 'The snowplow_id after the change (e.g., after a merge or creation event).'
+        description: 'The snowplow_id after the change. For merges, this is the parent/canonical ID. For creates, this is the new ID.'
         tests:
           - not_null
       - name: previous_snowplow_id
-        description: 'The ID that was merged (NULL for new ID creation).'
+        description: 'The ID that was merged into snowplow_id (NULL for new ID creation).'
+      - name: active_snowplow_id
+        description: 'The canonical parent ID. Same as snowplow_id (included for consistency with SCD model).'
+        tests:
+          - not_null
+      - name: effective_at
+        description: 'Event time - when this change actually occurred (from derived_tstamp for creates, merged_at for merges).'
+        tests:
+          - not_null
       - name: changed_at
-        description: 'The timestamp when the identity was created or merged taken from the identity context or merge event.'
-      - name: triggering_event_timestamp
-        description: 'The derived_tstamp of the first event belonging to a snowplow_id which may have caused the identitiy to be created unless earlier modelled records exist in the new_identities table.'
+        description: 'Processing time - when dbt materialized this record. Useful for incremental logic and pipeline monitoring.'
       - name: change_type
         description: 'Indicates whether the record was created due to a new identity creation or a merge event.'
-      - name: triggering_event_id
+      - name: first_seen_event_id
         description: 'The event that triggered this change.'
-      - name: triggering_app_id
+      - name: first_seen_app_id
         description: 'The app_id where this change originated.'
   - name: snowplow_identities_identifier_mapping
     description: '{{ doc("table_identifier_mapping") }}'
@@ -49,6 +55,8 @@ models:
         description: 'The derived_tstamp from the first event associated with this snowplow_id .'
       - name: last_seen_at
         description: 'The derived_tstamp from the last event associated with this snowplow_id .'
+      - name: first_seen_event_id
+        description: 'The first event that contributed this identifier to the mapping.'
   - name: snowplow_identities_snowplow_id_mapping
     description: '{{ doc("table_snowplow_id_mapping") }}'
     columns:
@@ -63,3 +71,35 @@ models:
         description: 'The timestamp when the identifier was merged.'
       - name: model_tstamp
         description: 'The timestamp when this record was created in the model.'
+  - name: snowplow_identities_id_mapping_scd
+    description: '{{ doc("table_id_mapping_scd") }}'
+    columns:
+      - name: snowplow_id
+        description: 'The Snowplow ID being mapped. For merges, this is the child ID that was merged into a parent. For creates, this is the newly created ID.'
+        tests:
+          - not_null
+      - name: active_snowplow_id
+        description: 'The canonical parent ID for this validity period. Handles transitive merges.'
+        tests:
+          - not_null
+      - name: effective_at
+        description: 'Event time - when this mapping became valid (from the merge or create event).'
+        tests:
+          - not_null
+      - name: superseded_at
+        description: 'Event time - when this mapping was superseded by a new mapping. NULL if this is the current mapping.'
+      - name: changed_at
+        description: 'Processing time - when dbt discovered this change.'
+      - name: change_type
+        description: 'Type of change: "created" for new IDs or "merged" for merge events.'
+      - name: first_seen_event_id
+        description: 'The event that triggered this change.'
+      - name: first_seen_app_id
+        description: 'The app_id where this change originated.'
+      - name: is_current
+        description: 'Derived flag: true if superseded_at IS NULL, indicating this is the current active mapping.'
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns:
+            - snowplow_id
+            - effective_at

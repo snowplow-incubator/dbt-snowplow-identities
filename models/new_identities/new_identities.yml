@@ -11,13 +11,12 @@ models:
           - unique
       - name: created_at
         description: 'The identity creation timestamp of the given snowplow_id taken from the identity context.'
-      - name: triggering_event_id
-        description: 'The event_id of the first event belonging to a snowplow_id in a given run which may have caused the identitiy to be created unless earlier modelled records exist in the new_identities table.'
+      - name: first_seen_event_id
+        description: 'The event_id of the first event belonging to this snowplow_id.'
       - name: domain_userid
         description: 'The domain_userid from the first event associated with this snowplow_id. Optional, dictated by var("snowplow__identifiers").'
       - name: user_id
         description: 'The user_id from the first event associated with this snowplow_id. Optional, dictated by var("snowplow__identifiers").'
-      - name: first_app_id
       - name: first_app_id
         description: 'The app_id from the first event associated with this snowplow_id.'
       - name: last_app_id
