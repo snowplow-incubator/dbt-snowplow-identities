@@ -9,7 +9,7 @@ You may obtain a copy of the Snowplow Personal and Academic License Version 1.0 
   config(
     materialized='incremental',
     on_schema_change='append_new_columns',
-    unique_key=['snowplow_id', 'effective_at'],
+    unique_key='id_change_key',
     upsert_date_key='effective_at',
     sql_header=snowplow_utils.set_query_tag(var('snowplow__query_tag', 'snowplow_dbt')),
     partition_by = snowplow_utils.get_value_by_target_type(bigquery_val = {
@@ -27,94 +27,62 @@ You may obtain a copy of the Snowplow Personal and Academic License Version 1.0 
   )
 }}
 
--- Slowly Changing Dimension (Type 2) for identity mappings
--- Uses event time (effective_at) for point-in-time reproducible queries
--- Computes validity windows from the immutable id_changes log
---
--- Point-in-time query pattern:
---   SELECT s.snowplow_id, scd.active_snowplow_id
---   FROM sessions s
---   JOIN snowplow_identities_id_mapping_scd scd ON s.snowplow_id = scd.snowplow_id
---   WHERE scd.effective_at <= @query_timestamp
---     AND (scd.superseded_at IS NULL OR scd.superseded_at > @query_timestamp)
-
-{% set lookback_days = var('snowplow__scd_lookback_days', 1) %}
-
-with changes_base as (
-    -- Merge events: previous_snowplow_id is mapped to snowplow_id (the parent)
-    select
-        previous_snowplow_id as snowplow_id,
-        active_snowplow_id,
-        effective_at,
-        changed_at,
-        change_type,
-        first_seen_event_id,
-        first_seen_app_id
-    from {{ ref('snowplow_identities_id_changes') }}
-    where change_type = 'merged'
-      and previous_snowplow_id is not null
-
-    union all
-
-    -- Create events: snowplow_id maps to itself initially
-    select
-        snowplow_id,
-        active_snowplow_id,
-        effective_at,
-        changed_at,
-        change_type,
-        first_seen_event_id,
-        first_seen_app_id
-    from {{ ref('snowplow_identities_id_changes') }}
-    where change_type = 'created'
-),
-
-with_superseded as (
-    select
-        snowplow_id,
-        active_snowplow_id,
-        effective_at,
-        changed_at,
-        change_type,
-        first_seen_event_id,
-        first_seen_app_id,
-        -- Compute when this mapping was superseded by the next change to this snowplow_id
-        lead(effective_at) over (
-            partition by snowplow_id
-            order by effective_at asc, first_seen_event_id asc
-        ) as superseded_at
-    from changes_base
+WITH ids_affected_this_run AS (
+    SELECT DISTINCT snowplow_id 
+    FROM {{ ref('snowplow_identities_id_changes_this_run') }}
 )
 
-select
+{% if is_incremental() %}
+    , historical_records AS (
+        SELECT 
+            id_change_key, 
+            snowplow_id,
+            active_snowplow_id,
+            effective_at,
+            change_type
+        FROM {{ this }}
+        WHERE snowplow_id IN (SELECT snowplow_id FROM ids_affected_this_run)
+        AND superseded_at IS NULL
+    )
+    {% endif %}
+
+, new_records AS (
+    SELECT 
+        id_change_key,
+        -- The ID we are tracking (could be a child being merged or a new ID being created)
+        CASE WHEN change_type = 'merged' THEN previous_snowplow_id ELSE snowplow_id END AS snowplow_id,
+        active_snowplow_id,
+        effective_at,
+        change_type
+    FROM {{ ref('snowplow_identities_id_changes_this_run') }}
+)
+
+, combined AS (
+    SELECT * FROM new_records
+    
+    {% if is_incremental() %}
+        UNION ALL
+        SELECT * FROM historical_records
+    {% endif %}
+)
+
+, final_scd AS (
+    SELECT
+        id_change_key,
+        snowplow_id,
+        active_snowplow_id,
+        effective_at,
+        LEAD(effective_at) OVER (PARTITION BY snowplow_id ORDER BY effective_at ASC) as superseded_at,
+        change_type
+    FROM combined
+)
+
+SELECT 
+    id_change_key,
     snowplow_id,
     active_snowplow_id,
     effective_at,
     superseded_at,
-    changed_at,
     change_type,
-    first_seen_event_id,
-    first_seen_app_id,
-    (superseded_at is null) as is_current
-
-from with_superseded
-
-{% if is_incremental() %}
--- For incremental runs, reprocess snowplow_ids that had changes since last run
-where snowplow_id in (
-    -- IDs that had direct changes (merges where they are the child)
-    select distinct previous_snowplow_id
-    from {{ ref('snowplow_identities_id_changes') }}
-    where change_type = 'merged'
-      and previous_snowplow_id is not null
-      and changed_at >= (select max(changed_at) from {{ this }}) - interval {{ lookback_days }} day
-
-    union distinct
-
-    -- IDs that were created
-    select distinct snowplow_id
-    from {{ ref('snowplow_identities_id_changes') }}
-    where change_type = 'created'
-      and changed_at >= (select max(changed_at) from {{ this }}) - interval {{ lookback_days }} day
-)
-{% endif %}
+    (superseded_at IS NULL) AS is_current
+FROM final_scd

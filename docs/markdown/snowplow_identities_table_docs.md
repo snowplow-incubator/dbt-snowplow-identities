@@ -62,11 +62,10 @@ Optionally, id_values can be the hashed version of the identifier instead of the
 Incremental table containing first and last observed activity for a given Snowplow identifier.
 {% enddocs %}
 
-
 {% docs table_id_mapping_scd %}
 SCD Type 2 table for identity mappings with event-time semantics.
 
-This table provides point-in-time reproducible queries for identity resolution. Unlike dbt snapshots which use processing time, this table uses event time (`effective_at`) to track when mappings actually occurred.
+This table provides point-in-time reproducible queries for identity resolution. This table uses event time (`effective_at`) to track when mappings actually occurred.
 
 **Point-in-Time Query Pattern:**
 ```sql
