@@ -3,6 +3,9 @@ target/
 dbt_modules/
 dbt_packages/
 logs/
+package-lock.yml
+dbt-service-account.json
+dbt_internal_packages/
 
 ### VisualStudioCode ###
 .vscode/*
@@ -17,3 +20,5 @@ logs/
 # Ignore all local history of files
 .history
 .ionide
+
+.DS_Store
