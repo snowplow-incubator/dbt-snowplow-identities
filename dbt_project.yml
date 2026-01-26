@@ -58,7 +58,6 @@ vars:
     # OPERATION & LOGIC
     snowplow__allow_refresh: false #  If set to true, the incremental manifest will be dropped when running with a `--full-refresh` flag
     snowplow__dev_target_name: dev # If the target matches the dev target, there is no need to set the snowplow__allow_refresh to true to drop the manifest table as well
-    snowplow__app_id: [] # List of app_ids to filter events on. Empty list means no filtering.
     snowplow__hash_identifiers: false # Set to true to hash identifiers before processing (recommended for PII compliance)
     snowplow__identifiers: [{'reference': 'domain_userid', 'alias': 'domain_userid'}, {'reference': 'user_id', 'alias': 'user_id'}] # List of identifiers to process.
     snowplow__backfill_limit_days: 30
