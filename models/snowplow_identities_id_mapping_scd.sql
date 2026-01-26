@@ -51,7 +51,7 @@ WITH ids_affected_this_run AS (
         id_change_key,
         -- The ID we are tracking (could be a child being merged or a new ID being created)
         CASE WHEN change_type = 'merged' THEN previous_snowplow_id ELSE snowplow_id END AS snowplow_id,
-        active_snowplow_id,
+        snowplow_id as active_snowplow_id,
         effective_at,
         change_type
     FROM {{ ref('snowplow_identities_id_changes_this_run') }}

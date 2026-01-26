@@ -15,10 +15,6 @@ models:
           - not_null
       - name: previous_snowplow_id
         description: 'The ID that was merged into snowplow_id (NULL for new ID creation).'
-      - name: active_snowplow_id
-        description: 'The canonical parent ID. Same as snowplow_id (included for consistency with SCD model).'
-        tests:
-          - not_null
       - name: effective_at
         description: 'Event time - when this change actually occurred (from derived_tstamp for creates, merged_at for merges).'
         tests:

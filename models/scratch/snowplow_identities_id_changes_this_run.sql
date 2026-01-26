@@ -10,7 +10,6 @@ with id_changes as (
     select
         snowplow_id,
         cast(null as string) as previous_snowplow_id,
-        snowplow_id as active_snowplow_id,
         first_derived_tstamp as effective_at,
         'created' as change_type,
         first_seen_event_id,
@@ -24,7 +23,6 @@ with id_changes as (
     select
         p.active_snowplow_id as snowplow_id,
         m.snowplow_id as previous_snowplow_id,
-        p.active_snowplow_id as active_snowplow_id,
         m.merged_at as effective_at,
         'merged' as change_type,
         m.triggering_event_id as first_seen_event_id,
@@ -40,7 +38,6 @@ select
     {{ dbt_utils.generate_surrogate_key(['snowplow_id', 'previous_snowplow_id', 'effective_at']) }} as id_change_key,
     snowplow_id,
     previous_snowplow_id,
-    active_snowplow_id,
     effective_at,
     {{ snowplow_utils.current_timestamp_in_utc() }} as changed_at,
     change_type,
