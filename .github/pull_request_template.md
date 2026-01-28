@@ -59,7 +59,7 @@ Please use this format link issue numbers: Fixes #123
   commits if your PR already received reviews or comments.
 
   Before submitting a Pull Request, please ensure you've done the following:
-  - 📖 Read the Contributing Guide: https://github.com/snowplow/<YOUR REPO HERE>/blob/main/CONTRIBUTING.md
+  - 📖 Read the Contributing Guide: https://github.com/snowplow/dbt-snowplow-identities/blob/main/CONTRIBUTING.md
 -->
 
 <!--

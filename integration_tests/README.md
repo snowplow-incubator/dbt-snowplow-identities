@@ -1,12 +1,12 @@
-# <YOUR PACKAGE NAME>-integration-tests
+# snowplow_identities-integration-tests
 
-Integration test suite for the <YOUR PACKAGE NAME> dbt package.
+Integration test suite for the snowplow-identities dbt package.
 
 The `./scripts` directory contains the following:
 
-- `integration_tests.sh`: This tests the standard modules of the <YOUR PACKAGE NAME> package:
+- `integration_tests.sh`: This tests the standard modules of the snowplow-identities package:
 
-- Runs the <YOUR PACKAGE NAME> package 4 times to replicate incremental loading of events, then performs an equality test between the actual vs expected output.
+- Runs the snowplow-identities package 4 times to replicate incremental loading of events, then performs an equality test between the actual vs expected output.
 
 Run the scripts using:
 
@@ -16,11 +16,7 @@ bash integration_tests.sh -d {warehouse}
 
 Supported warehouses (should be the same as your target in your profile.yml):
 
-- redshift
 - bigquery
-- snowflake
-- databricks
-- postgres
 - all (iterates through all supported warehouses)
 
 ### What to look out for when writing integration tests:

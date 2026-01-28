@@ -1,0 +1,24 @@
+version: 2
+models:
+  - name: snowplow_identities_merge_events_this_run
+    description: '{{ doc("table_merge_events_this_run") }}'
+    columns:
+      - name: merge_event_id
+        description: 'The unique identifier for the merge event.'
+        tests:
+          - unique
+          - not_null
+      - name: active_snowplow_id
+        description: '{{ doc("col_active_snowplow_id") }}'
+        tests:
+          - not_null
+      - name: collector_tstamp
+        description: '{{ doc("col_collector_tstamp") }}'
+      - name: derived_tstamp
+        description: '{{ doc("col_derived_tstamp") }}'
+      - name: merged
+        description: 'The full identity hierarchy resolution history for the given merge event.'
+      - name: merges
+        description: 'The list of individual merges that were part of the given merge event.'
+
+

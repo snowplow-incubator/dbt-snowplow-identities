@@ -1,11 +1,11 @@
-# Created by https://www.toptal.com/developers/gitignore/api/python,dbt,visualstudiocode
-# Edit at https://www.toptal.com/developers/gitignore?templates=python,dbt,visualstudiocode
-
 ### dbt ###
 target/
 dbt_modules/
 dbt_packages/
 logs/
+package-lock.yml
+dbt-service-account.json
+dbt_internal_packages/
 
 ### VisualStudioCode ###
 .vscode/*
@@ -21,4 +21,4 @@ logs/
 .history
 .ionide
 
-# End of https://www.toptal.com/developers/gitignore/api/python,dbt,visualstudiocode
+.DS_Store
