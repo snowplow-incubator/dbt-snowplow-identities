@@ -42,7 +42,6 @@ WITH ids_affected_this_run AS (
             change_type
         FROM {{ this }}
         WHERE snowplow_id IN (SELECT snowplow_id FROM ids_affected_this_run)
-        AND superseded_at IS NULL
     )
     {% endif %}
 
@@ -66,6 +65,20 @@ WITH ids_affected_this_run AS (
     {% endif %}
 )
 
+-- in case of later arriving data causing duplicates, deduplicate to keep only the earliest effective_at record per snowplow_id + active_snowplow_id
+, deduped AS (
+    SELECT
+        id_change_key,
+        snowplow_id,
+        active_snowplow_id,
+        effective_at,
+        change_type
+    FROM combined
+    QUALIFY ROW_NUMBER() OVER (
+        PARTITION BY snowplow_id, active_snowplow_id
+        ORDER BY effective_at ASC
+    ) = 1
+)
 , final_scd AS (
     SELECT
         id_change_key,
@@ -74,7 +87,7 @@ WITH ids_affected_this_run AS (
         effective_at,
         LEAD(effective_at) OVER (PARTITION BY snowplow_id ORDER BY effective_at ASC) as superseded_at,
         change_type
-    FROM combined
+    FROM deduped
 )
 
 SELECT 

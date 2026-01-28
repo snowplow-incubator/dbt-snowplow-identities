@@ -26,7 +26,31 @@ You may obtain a copy of the Snowplow Personal and Academic License Version 1.0 
   )
 }}
 
-select *
+{% if not is_incremental() %}
 
-from {{ ref('snowplow_identities_id_changes_this_run') }}
+  select *
+  from {{ ref('snowplow_identities_id_changes_this_run') }}
+  where {{ snowplow_utils.is_run_with_new_events('snowplow_identities') }}
+  
+{% else %}
+
+select 
+
+    i.id_change_key,
+    i.snowplow_id,
+    i.previous_snowplow_id,
+    -- Always keep the earliest effective_at and changed at for any late arriving data
+    least(i.effective_at, t.effective_at) as effective_at,
+    least(i.changed_at, t.changed_at) as changed_at,
+    i.change_type,
+    case when t.effective_at is null or i.effective_at < t.effective_at then i.first_seen_event_id
+      else t.first_seen_event_id end as first_seen_event_id,
+    case when t.effective_at is null or i.effective_at < t.effective_at then i.first_seen_app_id
+      else t.first_seen_app_id end as first_seen_app_id
+
+from {{ ref('snowplow_identities_id_changes_this_run') }} i
+left join {{ this }} t
+on i.id_change_key = t.id_change_key
 where {{ snowplow_utils.is_run_with_new_events('snowplow_identities') }}
+
+{% endif %}
