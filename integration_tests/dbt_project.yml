@@ -35,7 +35,6 @@ models:
     +bind: false
 vars:
   snowplow_identities:
-    snowplow__allow_refresh: true
     snowplow__allow_null_dvce_tstamps: true
     snowplow__atomic_schema: 'dbt_agnes_test' # "{{target.schema ~ '_snplw_identities_int_tests'}}"
     snowplow__events_table: 'int_test_events' # snowplow_identities_events_stg
