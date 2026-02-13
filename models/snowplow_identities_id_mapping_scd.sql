@@ -40,7 +40,7 @@ WITH ids_affected_this_run AS (
         FROM {{ this }}
         WHERE snowplow_id IN (SELECT snowplow_id FROM ids_affected_this_run)
     )
-    {% endif %}
+{% endif %}
 
 , new_records AS (
     SELECT 
@@ -78,13 +78,18 @@ WITH ids_affected_this_run AS (
 )
 , final_scd AS (
     SELECT
-        id_change_key,
-        snowplow_id,
-        active_snowplow_id,
-        effective_at,
-        LEAD(effective_at) OVER (PARTITION BY snowplow_id ORDER BY effective_at ASC) as superseded_at,
-        change_type
-    FROM deduped
+        d.id_change_key,
+        d.snowplow_id,
+        d.active_snowplow_id,
+        d.effective_at,
+        LEAD(d.effective_at) OVER (PARTITION BY d.snowplow_id  ORDER BY d.effective_at ASC, 
+         -- For ties: current true parent comes last to stay active
+         CASE WHEN t.active_snowplow_id IS NOT NULL THEN 1 ELSE 0 END ASC) AS superseded_at,
+        d.change_type
+    FROM deduped d
+    LEFT JOIN {{ ref('snowplow_identities_snowplow_id_mapping_this_run') }} t
+        ON d.snowplow_id = t.snowplow_id
+        AND d.active_snowplow_id = t.active_snowplow_id
 )
 
 SELECT 
