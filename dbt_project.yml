@@ -2,7 +2,7 @@ name: 'snowplow_identities'
 version: '0.0.1'
 config-version: 2
 
-require-dbt-version: [">=1.6.0", "<2.0.0"]
+require-dbt-version: [">=1.10.6", "<2.0.0"]
 
 profile: 'default'
 
@@ -16,8 +16,6 @@ test-paths: ["tests"]
 seed-paths: ["seeds"]
 macro-paths: ["macros"]
 docs-paths: ["docs"]
-
-target-path: "target"
 clean-targets:
   - "target"
   - "dbt_packages"
@@ -25,7 +23,7 @@ clean-targets:
 models:
   snowplow_identities:
     +materialized: table
-    +file_format:  "{{ 'delta' if target.type not in ['spark'] else 'iceberg'}}"
+    +file_format: "{{ 'delta' if target.type not in ['spark'] else 'iceberg'}}"
     +incremental_strategy: "{{ None if target.type not in ['spark'] else 'merge' }}"
     +bind: false
     +tags: "snowplow_identities_incremental"
@@ -69,7 +67,7 @@ vars:
     # snowplow__events_table: "events" # Only set if not using 'events' table for Snowplow events data
     # PRIVATE VARS - DO NOT MODIFY
     snowplow__events: "{{ source('atomic', 'events') }}"
-    
+
     # LICENSE
     snowplow__license_accepted: false
 
@@ -79,3 +77,5 @@ on-run-start:
 on-run-end:
   - "{{ snowplow_utils.snowplow_incremental_post_hook_t(package_name='snowplow_identities', incremental_manifest_table_name='snowplow_identities_incremental_manifest', base_events_this_run_table_name='snowplow_identities_base_events_this_run') }}"
   - "{{ snowplow_utils.grant_usage_on_schemas_built_into(var('snowplow__grant_schemas', true)) }}"
+flags:
+  require_generic_test_arguments_property: true
