@@ -5,27 +5,24 @@ and you may not use this file except in compliance with the Snowplow Personal an
 You may obtain a copy of the Snowplow Personal and Academic License Version 1.0 at https://docs.snowplow.io/personal-and-academic-license-1.0/
 #}
 
-{{
-  config(
-    materialized='incremental',
-    on_schema_change='append_new_columns',
-    unique_key='id_change_key',
-    upsert_date_key='effective_at',
-    sql_header=snowplow_utils.set_query_tag(var('snowplow__query_tag', 'snowplow_dbt')),
-    partition_by = snowplow_utils.get_value_by_target_type(bigquery_val = {
+{{ config(
+    materialized="incremental", 
+    on_schema_change="append_new_columns", 
+    unique_key="id_change_key", 
+    sql_header=snowplow_utils.set_query_tag(var('snowplow__query_tag', 'snowplow_dbt')), 
+    partition_by=snowplow_utils.get_value_by_target_type(bigquery_val = {
       "field": "effective_at",
       "data_type": "timestamp",
       "granularity": "day"
-    }, databricks_val='effective_at_date'),
-    cluster_by=snowplow_identities.get_cluster_by_values('id_mapping_scd'),
-    tags=["derived"],
+    }, databricks_val='effective_at_date'), 
+    cluster_by=snowplow_identities.get_cluster_by_values('id_mapping_scd'), 
+    tags=["derived"], 
     tblproperties={
       'delta.autoOptimize.optimizeWrite' : 'true',
       'delta.autoOptimize.autoCompact' : 'true'
-    },
-    snowplow_optimize=true
-  )
-}}
+    }, 
+    meta={'upsert_date_key': 'effective_at', 'snowplow_optimize': true}
+) }}
 
 WITH ids_affected_this_run AS (
     SELECT DISTINCT snowplow_id 
@@ -43,7 +40,7 @@ WITH ids_affected_this_run AS (
         FROM {{ this }}
         WHERE snowplow_id IN (SELECT snowplow_id FROM ids_affected_this_run)
     )
-    {% endif %}
+{% endif %}
 
 , new_records AS (
     SELECT 
@@ -81,13 +78,18 @@ WITH ids_affected_this_run AS (
 )
 , final_scd AS (
     SELECT
-        id_change_key,
-        snowplow_id,
-        active_snowplow_id,
-        effective_at,
-        LEAD(effective_at) OVER (PARTITION BY snowplow_id ORDER BY effective_at ASC) as superseded_at,
-        change_type
-    FROM deduped
+        d.id_change_key,
+        d.snowplow_id,
+        d.active_snowplow_id,
+        d.effective_at,
+        LEAD(d.effective_at) OVER (PARTITION BY d.snowplow_id  ORDER BY d.effective_at ASC, 
+         -- For ties: current true parent comes last to stay active
+         CASE WHEN t.active_snowplow_id IS NOT NULL THEN 1 ELSE 0 END ASC) AS superseded_at,
+        d.change_type
+    FROM deduped d
+    LEFT JOIN {{ ref('snowplow_identities_snowplow_id_mapping_this_run') }} t
+        ON d.snowplow_id = t.snowplow_id
+        AND d.active_snowplow_id = t.active_snowplow_id
 )
 
 SELECT 

@@ -6,13 +6,13 @@ models:
     columns:
       - name: model
         description: The name of the model.
-        tags:
-          - primary-key
         tests:
           - unique
           - not_null
+        config:
+          tags:
+            - primary-key
       - name: first_success
         description: The earliest event consumed by the model, based on `load_tstamp`
       - name: last_success
         description: The latest event consumed by the model, based on `load_tstamp`
-

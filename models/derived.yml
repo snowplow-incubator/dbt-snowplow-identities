@@ -96,6 +96,7 @@ models:
         description: 'Derived flag: true if superseded_at IS NULL, indicating this is the current active mapping.'
     tests:
       - dbt_utils.unique_combination_of_columns:
-          combination_of_columns:
-            - snowplow_id
-            - effective_at
+          arguments:
+            combination_of_columns:
+              - snowplow_id
+              - effective_at

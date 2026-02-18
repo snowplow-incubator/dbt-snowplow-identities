@@ -8,17 +8,19 @@ dispatch:
   - macro_namespace: dbt
     search_order: ['snowplow_utils', 'dbt']
 
-model-paths: ["models"]
-analysis-paths: ["analysis"]
-test-paths: ["tests"]
-seed-paths: ["data"]
-macro-paths: ["macros"]
-
-target-path: "target"
+model-paths:
+  - models
+test-paths:
+  - tests
+seed-paths:
+  - data
+macro-paths:
+  - macros
 clean-targets:
-    - "target"
-    - "dbt_modules"
-    - "dbt_packages"
+  - target
+  - dbt_modules
+  - dbt_packages
+
 
 quoting:
   identifier: false
@@ -28,12 +30,11 @@ quoting:
 models:
   snowplow_identities_integration_tests:
     +materialized: table
-    bind: false
     +schema: "snplw_identities_int_tests"
-    source:
+    +source:
+    +bind: false
 vars:
   snowplow_identities:
-    snowplow__allow_refresh: true
     snowplow__allow_null_dvce_tstamps: true
     snowplow__atomic_schema: 'dbt_agnes_test' # "{{target.schema ~ '_snplw_identities_int_tests'}}"
     snowplow__events_table: 'int_test_events' # snowplow_identities_events_stg
@@ -44,7 +45,6 @@ vars:
     snowplow__license_accepted: true
 
 seeds:
-  quote_columns: false
   snowplow_identities_integration_tests:
     +schema: "snplw_identities_int_tests"
     source:
@@ -110,3 +110,6 @@ seeds:
           contexts_com_snowplowanalytics_snowplow_client_session_1_0_0: "{{ 'string' if target.type in ['bigquery', 'databricks', 'spark'] else 'varchar(65535)' }}"
           unstruct_event_com_snowplowanalytics_mobile_screen_view_1_0_0: "{{ 'string' if target.type in ['bigquery', 'databricks', 'spark'] else 'varchar(65535)' }}"
           contexts_com_snowplowanalytics_snowplow_geolocation_context_1_0_0: "{{ 'string' if target.type in ['bigquery', 'databricks', 'spark'] else 'varchar(65535)' }}"
+  +quote_columns: false
+flags:
+  require_generic_test_arguments_property: true
