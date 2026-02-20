@@ -15,16 +15,19 @@ You may obtain a copy of the Snowplow Personal and Academic License Version 1.0 
 
 with prep as (
     select
-      event_id as merge_event_id,
-      unstruct_event_com_snowplowanalytics_snowplow_identity_merge_1.snowplow_id AS active_snowplow_id,
+      event_id as merge_event_id
+      {{ get_merge_fields() }},
       collector_tstamp,
       derived_tstamp,
-      unstruct_event_com_snowplowanalytics_snowplow_identity_merge_1.merged as merged,
-      unstruct_event_com_snowplowanalytics_snowplow_identity_merge_1.merges as merges
     from {{ ref('snowplow_identities_base_events_this_run') }}
     where event_name = 'identity_merge'
 )
 
 select
-*
+    merge_event_id,
+    active_snowplow_id,
+    collector_tstamp,
+    derived_tstamp,
+    merged,
+    merges
 from prep

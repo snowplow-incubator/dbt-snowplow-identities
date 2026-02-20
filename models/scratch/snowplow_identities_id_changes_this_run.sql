@@ -5,7 +5,11 @@ and you may not use this file except in compliance with the Snowplow Personal an
 You may obtain a copy of the Snowplow Personal and Academic License Version 1.0 at https://docs.snowplow.io/personal-and-academic-license-1.0/
 #}
 
-with id_changes as (
+with unnesting as (
+ {{ extract_merged() }}
+),
+
+id_changes as (
     -- New identity creations
     select
         snowplow_id,
@@ -20,18 +24,16 @@ with id_changes as (
     union all
 
     -- Merge events
-    select
-        p.active_snowplow_id as snowplow_id,
-        m.snowplow_id as previous_snowplow_id,
-        m.merged_at as effective_at,
-        'merged' as change_type,
-        m.triggering_event_id as first_seen_event_id,
-        n.first_app_id as first_seen_app_id
-
-    from {{ ref('snowplow_identities_merge_events_this_run') }} as p,
-    UNNEST(p.merged) AS m
-    left join {{ ref('snowplow_identities_new_identities_this_run') }} n
-    on m.snowplow_id = n.snowplow_id
+        select
+            m.active_snowplow_id as snowplow_id,
+            m.snowplow_id as previous_snowplow_id,
+            m.merged_at as effective_at,
+            'merged' as change_type,
+            m.triggering_event_id as first_seen_event_id,
+            n.first_app_id as first_seen_app_id
+        from unnesting m
+        left join {{ ref('snowplow_identities_new_identities_this_run') }} n
+          on m.snowplow_id = n.snowplow_id
 )
 
 select

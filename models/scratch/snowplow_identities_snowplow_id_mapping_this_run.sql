@@ -5,14 +5,19 @@ and you may not use this file except in compliance with the Snowplow Personal an
 You may obtain a copy of the Snowplow Personal and Academic License Version 1.0 at https://docs.snowplow.io/personal-and-academic-license-1.0/
 #}
 
-WITH all_direct_mappings AS (
+WITH unnesting as (
+    {{ extract_merged() }}
+),
+
+all_direct_mappings AS (
     -- Unnest the merged array to get all direct child -> parent relationships
     SELECT
         p.active_snowplow_id,
         m.snowplow_id AS snowplow_id,
         m.merged_at
-    FROM {{ ref('snowplow_identities_merge_events_this_run') }} AS p,
-    UNNEST(p.merged) AS m
+    FROM {{ ref('snowplow_identities_merge_events_this_run') }} AS p
+    left join unnesting m
+    on p.active_snowplow_id = m.active_snowplow_id
 ),
 
 true_parents AS (
@@ -32,7 +37,7 @@ deduplicated AS (
     ON t.active_snowplow_id = n.active_snowplow_id
 )
 
-SELECT 
+SELECT distinct 
     d.snowplow_id,
     d.active_snowplow_id,
     d.merged_at,
