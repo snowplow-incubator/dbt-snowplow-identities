@@ -13,7 +13,7 @@ You may obtain a copy of the Snowplow Personal and Academic License Version 1.0 
 
   {% set bq_identity_fields = [
     {'field':('snowplow_id', 'active_snowplow_id'), 'dtype':'string'},
-    {'field':('merged', 'merged'), 'dtype':'string'},
+    {'field':('merged', 'merged'), 'dtype':'array<struct<created_at timestamp, merged_at timestamp, snowplow_id string, triggering_event_id string>>'},
     {'field':('merges', 'merges'), 'dtype':'array<string>'}
     ] %}
 
