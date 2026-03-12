@@ -72,7 +72,7 @@ WITH ids_affected_this_run AS (
         change_type
     FROM combined
     QUALIFY ROW_NUMBER() OVER (
-        PARTITION BY snowplow_id, active_snowplow_id
+        PARTITION BY snowplow_id, active_snowplow_id, effective_at
         ORDER BY effective_at ASC
     ) = 1
 )

@@ -36,14 +36,14 @@ models:
 vars:
   snowplow_identities:
     snowplow__allow_null_dvce_tstamps: true
-    snowplow__atomic_schema: 'dbt_agnes_test' # "{{target.schema ~ '_snplw_identities_int_tests'}}"
-    snowplow__events_table: 'int_test_events' # snowplow_identities_events_stg
+    snowplow__atomic_schema: atomic_streaming # 'dbt_agnes_test' # "{{target.schema ~ '_snplw_identities_int_tests'}}"
+    snowplow__events_table: events # 'int_test_events' # snowplow_identities_events_stg
     # snowplow__events: "{{ ref('snowplow_identities_events_stg') }}"
-    snowplow__start_date: "2025-12-05"
-    snowplow__backfill_limit_days: 1
+    snowplow__start_date: '2026-01-01' # '2025-12-05'
+    snowplow__backfill_limit_days: 30
     snowplow__databricks_catalog: hive_metastore
     snowplow__license_accepted: true
-
+    snowplow__app_id: ['snowplow-identities'] # Used for testing purposes
 seeds:
   snowplow_identities_integration_tests:
     +schema: "snplw_identities_int_tests"
