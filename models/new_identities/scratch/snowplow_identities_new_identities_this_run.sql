@@ -10,7 +10,7 @@ with prep as (
         -- Extract identity fields directly from the event using the macro
         {{ snowplow_identities.get_identity_fields() }}
         {% for identifier in var('snowplow__identifiers', [{'reference': 'domain_userid', 'alias': 'domain_userid'}, {'reference': 'user_id', 'alias': 'user_id'}]) %}
-        {{ identifier.alias }},
+        {{ identifier.reference }} as {{ identifier.alias }},
         {% endfor %}
         event_id,
         app_id,
