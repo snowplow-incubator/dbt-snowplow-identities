@@ -9,6 +9,13 @@ You may obtain a copy of the Snowplow Personal and Academic License Version 1.0 
   {{ return(adapter.dispatch('extract_merged', 'snowplow_identities')()) }}
 {%- endmacro -%}
 
+{% macro default__extract_merged() %}
+  {{ exceptions.raise_compiler_error(
+    "The `extract_merged` macro is not implemented for adapter `"
+    ~ target.type
+    ~ "`. Supported adapters are: `snowflake`, `bigquery`."
+  ) }}
+{% endmacro %}
 {% macro snowflake__extract_merged() %}
     select
         p.active_snowplow_id,
