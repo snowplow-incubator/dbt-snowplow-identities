@@ -62,7 +62,7 @@ WITH ids_affected_this_run AS (
     {% endif %}
 )
 
--- in case of later arriving data causing duplicates, deduplicate to keep only the earliest effective_at record per snowplow_id + active_snowplow_id
+-- deduplicate exact duplicate rows (same snowplow_id, active_snowplow_id, effective_at) that can arise from late-arriving data being reprocessed
 , deduped AS (
     SELECT
         id_change_key,
@@ -73,7 +73,7 @@ WITH ids_affected_this_run AS (
     FROM combined
     QUALIFY ROW_NUMBER() OVER (
         PARTITION BY snowplow_id, active_snowplow_id, effective_at
-        ORDER BY effective_at ASC
+        ORDER BY id_change_key
     ) = 1
 )
 , final_scd AS (
