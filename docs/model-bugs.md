@@ -99,7 +99,9 @@ Expected:
 
 ---
 
-## Bug 4: Identifier re-pointing fails for merges in incremental runs
+## Bug 4: Identifier re-pointing fails for merges in incremental runs — FIXED
+
+**Fixed in:** PENDING_COMMIT
 
 **Affected groups:** basic
 
@@ -119,7 +121,9 @@ Expected:
 | sp_A | domain_userid | ghi789 |
 | sp_A | user_id | carol@co |
 
-**Root cause:** The identifier_mapping model joins against snowplow_id_mapping to resolve active_snowplow_id, but the re-pointing logic may not update existing rows during incremental runs.
+**Root cause:** The re-pointing logic (`existing_identifiers_to_update` CTE) was in `identifier_mapping_this_run.sql`, a scratch model materialized as `table`. It was guarded by `is_incremental()` and read from `{{ this }}` — both features that only work in incremental models. Since the model was a table, `is_incremental()` always returned false and the entire re-pointing block was dead code. Re-pointing only worked by accident when the absorbed identity had events in the same run as the merge (so its identifiers appeared in `new_identifiers` and got resolved via the `snowplow_id_mapping` join).
+
+**Fix:** Moved the re-pointing logic from the scratch `_this_run` model into the outer `identifier_mapping.sql`, which IS incremental. There, `is_incremental()` returns true and `{{ this }}` correctly refers to the persisted table with historical data. The scratch model was simplified to only produce new identifiers with resolved active_snowplow_id.
 
 **Failing tests:** `dbt_utils_equality_basic_identifier_mapping_actual_*`
 
