@@ -1,0 +1,4 @@
+snowplow_id,created_at,first_seen_event_id,first_app_id,domain_userid,user_id
+sp_M,2026-03-10 08:00:00,evt-40,web,mmm111,mike@co
+sp_N,2026-03-10 08:30:00,evt-41,web,nnn222,
+sp_J,2026-03-13 08:00:00,evt-46,web,mmm111,

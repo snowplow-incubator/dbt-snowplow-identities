@@ -1,0 +1,17 @@
+snowplow_id,active_snowplow_id,effective_at,superseded_at,change_type,is_current
+sp_P,sp_P,2026-03-10 08:00:00,,created,True
+sp_Q,sp_Q,2026-03-10 08:05:00,2026-03-10 09:00:00,created,False
+sp_Q,sp_P,2026-03-10 09:00:00,,merged,True
+sp_R,sp_R,2026-03-10 08:10:00,2026-03-10 09:05:00,created,False
+sp_R,sp_P,2026-03-10 09:05:00,,merged,True
+sp_S,sp_S,2026-03-10 09:05:00,2026-03-10 09:05:00,created,False
+sp_S,sp_P,2026-03-10 09:05:00,,merged,True
+sp_T,sp_T,2026-03-11 10:00:00,2026-03-11 11:05:00,created,False
+sp_T,sp_V,2026-03-11 11:05:00,,merged,True
+sp_U,sp_U,2026-03-11 10:05:00,2026-03-11 11:00:00,created,False
+sp_U,sp_T,2026-03-11 11:00:00,,merged,True
+sp_V,sp_V,2026-03-11 10:10:00,,created,True
+sp_W,sp_W,2026-03-12 10:00:00,2026-03-12 11:00:00,created,False
+sp_W,sp_X,2026-03-12 11:00:00,,merged,True
+sp_X,sp_X,2026-03-12 10:05:00,2026-03-12 11:00:00,created,False
+sp_X,sp_P,2026-03-12 11:00:00,,merged,True

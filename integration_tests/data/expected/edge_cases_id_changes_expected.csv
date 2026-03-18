@@ -1,0 +1,5 @@
+snowplow_id,previous_snowplow_id,effective_at,change_type,first_seen_app_id
+sp_M,,2026-03-10 08:00:00,created,web
+sp_N,,2026-03-10 08:30:00,created,web
+sp_M,sp_N,2026-03-11 09:00:00,merged,
+sp_J,,2026-03-13 08:00:00,created,web

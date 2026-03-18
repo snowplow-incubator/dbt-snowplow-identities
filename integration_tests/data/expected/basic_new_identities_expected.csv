@@ -1,0 +1,5 @@
+snowplow_id,created_at,first_seen_event_id,first_app_id,last_app_id,domain_userid,user_id,first_derived_tstamp,last_derived_tstamp
+sp_A,2026-03-10 08:00:00,evt-1,web,web,abc123,alice@co,2026-03-10 08:00:00,2026-03-11 10:00:00
+sp_B,2026-03-10 08:15:00,evt-3,web,web,xyz789,,2026-03-10 08:15:00,2026-03-10 08:15:00
+sp_C,2026-03-10 08:20:00,evt-4,mobile,mobile,def456,bob@co,2026-03-10 08:20:00,2026-03-10 08:20:00
+sp_D,2026-03-11 10:30:00,evt-9,web,web,ghi789,carol@co,2026-03-11 10:30:00,2026-03-11 10:30:00

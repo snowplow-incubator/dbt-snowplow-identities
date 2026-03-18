@@ -1,0 +1,10 @@
+active_snowplow_id,id_type,id_value
+sp_P,domain_userid,aaa111
+sp_P,domain_userid,bbb222
+sp_P,domain_userid,ccc333
+sp_P,domain_userid,ddd444
+sp_V,domain_userid,eee555
+sp_V,domain_userid,fff666
+sp_V,domain_userid,ggg777
+sp_P,domain_userid,hhh888
+sp_P,domain_userid,iii999

@@ -1,0 +1,7 @@
+event_id,event_name,app_id,collector_tstamp,derived_tstamp,load_tstamp,dvce_created_tstamp,domain_userid,user_id,contexts_com_snowplowanalytics_snowplow_identity_1,unstruct_event_com_snowplowanalytics_snowplow_identity_merge_1
+evt-40,page_view,web,2026-03-10 08:00:00,2026-03-10 08:00:00,2026-03-10 12:00:00,2026-03-10 08:00:00,mmm111,mike@co,"[{""snowplowId"":""sp_M"",""createdAt"":""2026-03-10T08:00:00""}]",
+evt-41,page_view,web,2026-03-10 08:30:00,2026-03-10 08:30:00,2026-03-10 12:00:00,2026-03-10 08:30:00,nnn222,,"[{""snowplowId"":""sp_N"",""createdAt"":""2026-03-10T08:30:00""}]",
+evt-42,identity_merge,web,2026-03-11 09:00:00,2026-03-11 09:00:00,2026-03-11 12:00:00,2026-03-11 09:00:00,,,,"{""snowplowId"":""sp_M"",""merged"":[{""snowplowId"":""sp_N"",""mergedAt"":""2026-03-11T09:00:00"",""triggeringEventId"":""evt-42""}],""merges"":[""sp_N""]}"
+evt-44,identity_merge,web,2026-03-12 09:00:00,2026-03-12 09:00:00,2026-03-12 12:00:00,2026-03-12 09:00:00,,,,"{""snowplowId"":""sp_M"",""merged"":[{""snowplowId"":""sp_N"",""mergedAt"":""2026-03-11T09:00:00"",""triggeringEventId"":""evt-44""}],""merges"":[""sp_N""]}"
+evt-40,page_view,web,2026-03-12 10:05:00,2026-03-10 07:55:00,2026-03-12 12:00:00,2026-03-12 10:05:00,mmm111,mike@co,"[{""snowplowId"":""sp_M"",""createdAt"":""2026-03-10T08:00:00""}]",
+evt-46,page_view,web,2026-03-13 08:00:00,2026-03-13 08:00:00,2026-03-13 12:00:00,2026-03-13 08:00:00,mmm111,,"[{""snowplowId"":""sp_J"",""createdAt"":""2026-03-13T08:00:00""}]",

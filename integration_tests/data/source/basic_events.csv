@@ -1,0 +1,11 @@
+event_id,event_name,app_id,collector_tstamp,derived_tstamp,load_tstamp,dvce_created_tstamp,domain_userid,user_id,contexts_com_snowplowanalytics_snowplow_identity_1,unstruct_event_com_snowplowanalytics_snowplow_identity_merge_1
+evt-1,page_view,web,2026-03-10 08:00:00,2026-03-10 08:00:00,2026-03-10 12:00:00,2026-03-10 08:00:00,abc123,,"[{""snowplowId"":""sp_A"",""createdAt"":""2026-03-10T08:00:00""}]",
+evt-2,page_view,web,2026-03-10 08:30:00,2026-03-10 08:30:00,2026-03-10 12:00:00,2026-03-10 08:30:00,abc123,alice@co,"[{""snowplowId"":""sp_A"",""createdAt"":""2026-03-10T08:00:00""}]",
+evt-3,page_view,web,2026-03-10 08:15:00,2026-03-10 08:15:00,2026-03-10 12:00:00,2026-03-10 08:15:00,xyz789,,"[{""snowplowId"":""sp_B"",""createdAt"":""2026-03-10T08:15:00""}]",
+evt-4,page_view,mobile,2026-03-10 08:20:00,2026-03-10 08:20:00,2026-03-10 12:00:00,2026-03-10 08:20:00,def456,bob@co,"[{""snowplowId"":""sp_C"",""createdAt"":""2026-03-10T08:20:00""}]",
+evt-5,page_view,web,2026-03-10 08:25:00,2026-03-10 08:25:00,2026-03-10 12:00:00,2026-03-10 08:25:00,zzz999,,,
+evt-1,page_view,web,2026-03-10 09:30:00,2026-03-10 08:00:00,2026-03-10 13:00:00,2026-03-10 09:30:00,abc123,,"[{""snowplowId"":""sp_A"",""createdAt"":""2026-03-10T08:00:00""}]",
+evt-7,identity_merge,web,2026-03-10 09:00:00,2026-03-10 09:00:00,2026-03-10 12:00:00,2026-03-10 09:00:00,,,,"{""snowplowId"":""sp_A"",""merged"":[{""snowplowId"":""sp_B"",""mergedAt"":""2026-03-10T09:00:00"",""triggeringEventId"":""evt-7""}],""merges"":[""sp_B""]}"
+evt-8,page_view,web,2026-03-11 10:00:00,2026-03-11 10:00:00,2026-03-11 12:00:00,2026-03-11 10:00:00,abc123,,"[{""snowplowId"":""sp_A"",""createdAt"":""2026-03-10T08:00:00""}]",
+evt-9,page_view,web,2026-03-11 10:30:00,2026-03-11 10:30:00,2026-03-11 12:00:00,2026-03-11 10:30:00,ghi789,carol@co,"[{""snowplowId"":""sp_D"",""createdAt"":""2026-03-11T10:30:00""}]",
+evt-10,identity_merge,web,2026-03-12 11:00:00,2026-03-12 11:00:00,2026-03-12 12:00:00,2026-03-12 11:00:00,,,,"{""snowplowId"":""sp_A"",""merged"":[{""snowplowId"":""sp_D"",""mergedAt"":""2026-03-12T11:00:00"",""triggeringEventId"":""evt-10""}],""merges"":[""sp_D""]}"

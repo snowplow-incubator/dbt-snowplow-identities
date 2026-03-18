@@ -1,0 +1,8 @@
+active_snowplow_id,id_type,id_value,first_app_id,last_app_id,first_seen_at,last_seen_at,first_seen_event_id
+sp_A,domain_userid,abc123,web,web,2026-03-10 08:00:00,2026-03-11 10:00:00,evt-1
+sp_A,user_id,alice@co,web,web,2026-03-10 08:00:00,2026-03-10 08:30:00,evt-1
+sp_A,domain_userid,xyz789,web,web,2026-03-10 08:15:00,2026-03-10 08:15:00,evt-3
+sp_C,domain_userid,def456,mobile,mobile,2026-03-10 08:20:00,2026-03-10 08:20:00,evt-4
+sp_C,user_id,bob@co,mobile,mobile,2026-03-10 08:20:00,2026-03-10 08:20:00,evt-4
+sp_A,domain_userid,ghi789,web,web,2026-03-11 10:30:00,2026-03-11 10:30:00,evt-9
+sp_A,user_id,carol@co,web,web,2026-03-11 10:30:00,2026-03-11 10:30:00,evt-9

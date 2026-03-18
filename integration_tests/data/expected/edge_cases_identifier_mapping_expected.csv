@@ -1,0 +1,5 @@
+active_snowplow_id,id_type,id_value,first_seen_at,last_seen_at
+sp_M,domain_userid,mmm111,2026-03-10 08:00:00,2026-03-10 08:00:00
+sp_M,user_id,mike@co,2026-03-10 08:00:00,2026-03-10 08:00:00
+sp_M,domain_userid,nnn222,2026-03-10 08:30:00,2026-03-10 08:30:00
+sp_J,domain_userid,mmm111,2026-03-13 08:00:00,2026-03-13 08:00:00

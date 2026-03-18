@@ -10,7 +10,7 @@ do
   esac
 done
 
-declare -a SUPPORTED_DATABASES=("bigquery" "postgres" "databricks" "redshift" "snowflake")
+declare -a SUPPORTED_DATABASES=("bigquery" "snowflake")
 
 # set to lower case
 DATABASE="$(echo $DATABASE | tr '[:upper:]' '[:lower:]')"
@@ -23,25 +23,42 @@ fi
 
 for db in ${DATABASES[@]}; do
 
-  echo "snowplow-identitiesintegration tests: Seeding data"
-  eval "dbt seed --full-refresh --target $db" || exit 1;
+  echo "Integration tests: Seeding data"
+  eval "dbt seed --full-refresh --target $db" || exit 1
 
-  echo "snowplow-identitiesintegration tests: Try run without data"
-  eval "dbt run --full-refresh --vars '{snowplow__allow_refresh: true, snowplow__backfill_limit_days: 1, snowplow__start_date: 2010-01-01}' --target $db" || exit 1;
+  for group in basic complex_merges edge_cases; do
 
-  echo "snowplow-identitiesintegration tests: Execute models - run 1/4"
-  eval "dbt run --full-refresh --vars '{snowplow__allow_refresh: true, snowplow__backfill_limit_days: 243}' --target $db" || exit 1;
+    echo "Integration tests: Running group $group"
 
-  for i in {2..4}
-  do
-    echo "snowplow-identitiesintegration tests: Execute models - run $i/4"
-    eval "dbt run --target $db" || exit 1;
+    echo "Integration tests: Run 1/4 (full-refresh) for $group"
+    eval "dbt run --full-refresh --vars '{snowplow__allow_refresh: true, snowplow__backfill_limit_days: 30, test_group: $group}' --target $db" || exit 1
+
+    for i in {2..4}; do
+      echo "Integration tests: Run $i/4 (incremental) for $group"
+      eval "dbt run --vars '{test_group: $group}' --target $db" || exit 1
+    done
+
+    echo "Integration tests: Testing group $group"
+    eval "dbt test --select tag:$group --store-failures --target $db" || exit 1
+
+    echo "Integration tests: Group $group passed on $db"
+
   done
 
-  echo "snowplow-identitiesintegration tests: Test models"
+  # Hashing group — separate run with snowplow__hash_identifiers
+  echo "Integration tests: Running group hashing"
 
-  eval "dbt test test_name:not_null --store-failures --target $db" || exit 1;
+  echo "Integration tests: Run 1/4 (full-refresh) for hashing"
+  eval "dbt run --full-refresh --vars '{snowplow__allow_refresh: true, snowplow__backfill_limit_days: 30, test_group: hashing, snowplow__hash_identifiers: true}' --target $db" || exit 1
 
-  echo "snowplow-identitiesintegration tests: All tests passed"
+  for i in {2..4}; do
+    echo "Integration tests: Run $i/4 (incremental) for hashing"
+    eval "dbt run --vars '{test_group: hashing, snowplow__hash_identifiers: true}' --target $db" || exit 1
+  done
+
+  echo "Integration tests: Testing group hashing"
+  eval "dbt test --select tag:hashing --store-failures --target $db" || exit 1
+
+  echo "Integration tests: All tests passed on $db"
 
 done

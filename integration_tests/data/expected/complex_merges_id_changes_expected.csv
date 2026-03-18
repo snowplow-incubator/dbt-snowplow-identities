@@ -1,0 +1,17 @@
+snowplow_id,previous_snowplow_id,effective_at,change_type,first_seen_app_id
+sp_P,,2026-03-10 08:00:00,created,web
+sp_Q,,2026-03-10 08:05:00,created,web
+sp_R,,2026-03-10 08:10:00,created,web
+sp_S,,2026-03-10 09:05:00,created,mobile
+sp_P,sp_Q,2026-03-10 09:00:00,merged,web
+sp_P,sp_R,2026-03-10 09:05:00,merged,web
+sp_P,sp_S,2026-03-10 09:05:00,merged,mobile
+sp_T,,2026-03-11 10:00:00,created,web
+sp_U,,2026-03-11 10:05:00,created,web
+sp_V,,2026-03-11 10:10:00,created,web
+sp_V,sp_T,2026-03-11 11:05:00,merged,web
+sp_T,sp_U,2026-03-11 11:00:00,merged,web
+sp_W,,2026-03-12 10:00:00,created,web
+sp_X,,2026-03-12 10:05:00,created,web
+sp_P,sp_X,2026-03-12 11:00:00,merged,web
+sp_X,sp_W,2026-03-12 11:00:00,merged,web
