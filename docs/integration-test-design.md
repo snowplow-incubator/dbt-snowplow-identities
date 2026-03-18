@@ -147,7 +147,7 @@ Tests merge resolution edge cases that involve non-trivial parent-child relation
 - **evt-20**: `page_view` for sp_P. Identity context `snowplow_id=sp_P`, `created_at=2026-03-10 08:00`. Has `domain_userid=aaa111`. `app_id=web`.
 - **evt-21**: `page_view` for sp_Q. Identity context `snowplow_id=sp_Q`, `created_at=2026-03-10 08:05`. Has `domain_userid=bbb222`. `app_id=web`.
 - **evt-22**: `page_view` for sp_R. Identity context `snowplow_id=sp_R`, `created_at=2026-03-10 08:10`. Has `domain_userid=ccc333`. `app_id=web`.
-- **evt-23**: `page_view` for sp_S. Identity context `snowplow_id=sp_S`, `created_at=2026-03-10 09:05`. Has `domain_userid=ddd444`. `app_id=mobile`. `derived_tstamp=2026-03-10 08:15`. Note: `created_at` deliberately equals sp_S's `merged_at` (from evt-25) to test SCD LEAD tie-breaking when two rows share the same `effective_at`.
+- **evt-23**: `page_view` for sp_S. Identity context `snowplow_id=sp_S`, `created_at=2026-03-10 09:05`. Has `domain_userid=ddd444`. `app_id=mobile`. `derived_tstamp=2026-03-10 08:15`. Note: `created_at` deliberately differs from `derived_tstamp`. The model uses `first_derived_tstamp` (08:15) as `effective_at` for created rows, not `created_at` (09:05).
 - **evt-24**: `identity_merge` — sp_Q merged into sp_P. Merged array: `[{snowplow_id: sp_Q, merged_at: 2026-03-10 09:00}]`. Simple merge baseline.
 - **evt-25**: `identity_merge` — sp_R AND sp_S merged into sp_P in a single event. Merged array: `[{snowplow_id: sp_R, merged_at: 2026-03-10 09:05}, {snowplow_id: sp_S, merged_at: 2026-03-10 09:05}]`. Tests multi-child merge in a single event.
 
@@ -207,7 +207,7 @@ Notes:
 | sp_P | NULL | 2026-03-10 08:00 | created | web |
 | sp_Q | NULL | 2026-03-10 08:05 | created | web |
 | sp_R | NULL | 2026-03-10 08:10 | created | web |
-| sp_S | NULL | 2026-03-10 09:05 | created | mobile |
+| sp_S | NULL | 2026-03-10 08:15 | created | mobile |
 | sp_P | sp_Q | 2026-03-10 09:00 | merged | web |
 | sp_P | sp_R | 2026-03-10 09:05 | merged | web |
 | sp_P | sp_S | 2026-03-10 09:05 | merged | mobile |
@@ -234,7 +234,7 @@ Notes:
 | sp_Q | sp_P | 2026-03-10 09:00 | NULL | merged | true |
 | sp_R | sp_R | 2026-03-10 08:10 | 2026-03-10 09:05 | created | false |
 | sp_R | sp_P | 2026-03-10 09:05 | NULL | merged | true |
-| sp_S | sp_S | 2026-03-10 09:05 | 2026-03-10 09:05 | created | false |
+| sp_S | sp_S | 2026-03-10 08:15 | 2026-03-10 09:05 | created | false |
 | sp_S | sp_P | 2026-03-10 09:05 | NULL | merged | true |
 | sp_T | sp_T | 2026-03-11 10:00 | 2026-03-11 11:05 | created | false |
 | sp_T | sp_V | 2026-03-11 11:05 | NULL | merged | true |
@@ -247,7 +247,7 @@ Notes:
 | sp_X | sp_P | 2026-03-12 11:00 | NULL | merged | true |
 
 Notes:
-- sp_S has two SCD rows with identical `effective_at=2026-03-10 09:05` (created_at equals merged_at). The LEAD window tie-break (`CASE WHEN t.active_snowplow_id IS NOT NULL`) must order the "merged" row after the "created" row so that `superseded_at` is set correctly and the merge row stays `is_current=true`.
+- sp_S's created row has `effective_at=2026-03-10 08:15` (first_derived_tstamp from evt-23) while its merged row has `effective_at=2026-03-10 09:05` (merged_at). Although `created_at=09:05` was set to equal `merged_at` to test SCD LEAD tie-breaking, the model uses `first_derived_tstamp` (not `created_at`) for created rows' effective_at, so the values differ and no tie-breaking is exercised.
 - sp_U shows `active_snowplow_id=sp_T` (not sp_V) because the SCD records the direct merge target, not the resolved chain. This is the SCD accurately reflecting what happened: sp_U was merged into sp_T. The fact that sp_T was then merged into sp_V is tracked in sp_T's own SCD row.
 - sp_W shows `active_snowplow_id=sp_X` (not sp_P) for the same reason.
 

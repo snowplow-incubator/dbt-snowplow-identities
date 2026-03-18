@@ -1,10 +1,10 @@
-snowplow_id,created_at,first_seen_event_id,first_app_id,domain_userid,user_id
-sp_P,2026-03-10 08:00:00,evt-20,web,aaa111,
-sp_Q,2026-03-10 08:05:00,evt-21,web,bbb222,
-sp_R,2026-03-10 08:10:00,evt-22,web,ccc333,
-sp_S,2026-03-10 09:05:00,evt-23,mobile,ddd444,
-sp_T,2026-03-11 10:00:00,evt-26,web,eee555,
-sp_U,2026-03-11 10:05:00,evt-27,web,fff666,
-sp_V,2026-03-11 10:10:00,evt-28,web,ggg777,
-sp_W,2026-03-12 10:00:00,evt-31,web,hhh888,
-sp_X,2026-03-12 10:05:00,evt-32,web,iii999,
+snowplow_id,created_at,first_seen_event_id,first_app_id,last_app_id,domain_userid,user_id,first_derived_tstamp,last_derived_tstamp
+sp_P,2026-03-10 08:00:00,evt-20,web,web,aaa111,,2026-03-10 08:00:00,2026-03-12 11:00:00
+sp_Q,2026-03-10 08:05:00,evt-21,web,web,bbb222,,2026-03-10 08:05:00,2026-03-10 08:05:00
+sp_R,2026-03-10 08:10:00,evt-22,web,web,ccc333,,2026-03-10 08:10:00,2026-03-10 08:10:00
+sp_S,2026-03-10 09:05:00,evt-23,mobile,mobile,ddd444,,2026-03-10 08:15:00,2026-03-10 08:15:00
+sp_T,2026-03-11 10:00:00,evt-26,web,web,eee555,,2026-03-11 10:00:00,2026-03-11 11:00:00
+sp_U,2026-03-11 10:05:00,evt-27,web,web,fff666,,2026-03-11 10:05:00,2026-03-11 10:05:00
+sp_V,2026-03-11 10:10:00,evt-28,web,web,ggg777,,2026-03-11 10:10:00,2026-03-11 11:05:00
+sp_W,2026-03-12 10:00:00,evt-31,web,web,hhh888,,2026-03-12 10:00:00,2026-03-12 10:00:00
+sp_X,2026-03-12 10:05:00,evt-32,web,web,iii999,,2026-03-12 10:05:00,2026-03-12 11:00:00
