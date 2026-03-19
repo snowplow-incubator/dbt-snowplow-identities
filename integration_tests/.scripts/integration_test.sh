@@ -30,12 +30,15 @@ for db in ${DATABASES[@]}; do
 
     echo "Integration tests: Running group $group"
 
+    echo "Integration tests: Resetting manifest for $group"
+    eval "dbt run --select snowplow_identities_incremental_manifest --full-refresh --vars '{snowplow__allow_refresh: true, test_group: $group}' --target $db" || exit 1
+
     echo "Integration tests: Run 1/4 (full-refresh) for $group"
-    eval "dbt run --full-refresh --vars '{snowplow__allow_refresh: true, snowplow__backfill_limit_days: 30, test_group: $group}' --target $db" || exit 1
+    eval "dbt run --full-refresh --vars '{snowplow__allow_refresh: true, snowplow__backfill_limit_days: 1, test_group: $group}' --target $db" || exit 1
 
     for i in {2..4}; do
       echo "Integration tests: Run $i/4 (incremental) for $group"
-      eval "dbt run --vars '{test_group: $group}' --target $db" || exit 1
+      eval "dbt run --vars '{snowplow__backfill_limit_days: 1, test_group: $group}' --target $db" || exit 1
     done
 
     echo "Integration tests: Testing group $group"
@@ -48,12 +51,15 @@ for db in ${DATABASES[@]}; do
   # Hashing group — separate run with snowplow__hash_identifiers
   echo "Integration tests: Running group hashing"
 
+  echo "Integration tests: Resetting manifest for hashing"
+  eval "dbt run --select snowplow_identities_incremental_manifest --full-refresh --vars '{snowplow__allow_refresh: true, test_group: hashing}' --target $db" || exit 1
+
   echo "Integration tests: Run 1/4 (full-refresh) for hashing"
-  eval "dbt run --full-refresh --vars '{snowplow__allow_refresh: true, snowplow__backfill_limit_days: 30, test_group: hashing, snowplow__hash_identifiers: true}' --target $db" || exit 1
+  eval "dbt run --full-refresh --vars '{snowplow__allow_refresh: true, snowplow__backfill_limit_days: 1, test_group: hashing, snowplow__hash_identifiers: true}' --target $db" || exit 1
 
   for i in {2..4}; do
     echo "Integration tests: Run $i/4 (incremental) for hashing"
-    eval "dbt run --vars '{test_group: hashing, snowplow__hash_identifiers: true}' --target $db" || exit 1
+    eval "dbt run --vars '{snowplow__backfill_limit_days: 1, test_group: hashing, snowplow__hash_identifiers: true}' --target $db" || exit 1
   done
 
   echo "Integration tests: Testing group hashing"
