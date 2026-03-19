@@ -26,6 +26,9 @@ for db in ${DATABASES[@]}; do
   echo "Integration tests: Seeding data"
   eval "dbt seed --full-refresh --target $db" || exit 1
 
+  echo "Integration tests: Run with empty tables"
+  eval "dbt run --full-refresh --vars '{snowplow__allow_refresh: true, snowplow__backfill_limit_days: 1, snowplow__start_date: 2010-01-01, test_group: basic}' --target $db" || exit 1
+
   for group in basic complex_merges edge_cases; do
 
     echo "Integration tests: Running group $group"
