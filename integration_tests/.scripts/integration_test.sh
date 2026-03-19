@@ -45,7 +45,7 @@ for db in ${DATABASES[@]}; do
     done
 
     echo "Integration tests: Testing group $group"
-    eval "dbt test --select tag:$group --store-failures --target $db" || exit 1
+    eval "dbt test --select tag:$group --vars '{store_failures: true}' --target $db" || exit 1
 
     echo "Integration tests: Group $group passed on $db"
 
@@ -66,10 +66,10 @@ for db in ${DATABASES[@]}; do
   done
 
   echo "Integration tests: Testing group hashing"
-  eval "dbt test --select tag:hashing --store-failures --target $db" || exit 1
+  eval "dbt test --select tag:hashing --vars '{store_failures: true}' --target $db" || exit 1
 
   echo "Integration tests: Testing uniqueness constraints"
-  eval "dbt test --select 'test_name:unique test_name:unique_combination_of_columns' --store-failures --target $db" || exit 1
+  eval "dbt test --select 'test_name:unique test_name:unique_combination_of_columns' --vars '{store_failures: true}' --target $db" || exit 1
 
   echo "Integration tests: All tests passed on $db"
 
