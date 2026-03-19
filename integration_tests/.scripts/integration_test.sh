@@ -68,6 +68,9 @@ for db in ${DATABASES[@]}; do
   echo "Integration tests: Testing group hashing"
   eval "dbt test --select tag:hashing --store-failures --target $db" || exit 1
 
+  echo "Integration tests: Testing uniqueness constraints"
+  eval "dbt test --select 'test_name:unique test_name:unique_combination_of_columns' --store-failures --target $db" || exit 1
+
   echo "Integration tests: All tests passed on $db"
 
 done
