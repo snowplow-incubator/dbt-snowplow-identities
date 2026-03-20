@@ -2,4 +2,3 @@ snowplow_id,active_snowplow_id,effective_at,superseded_at,change_type,is_current
 sp_M,sp_M,2026-03-10 08:00:00,,created,True
 sp_N,sp_N,2026-03-10 08:30:00,2026-03-11 09:00:00,created,False
 sp_N,sp_M,2026-03-11 09:00:00,,merged,True
-sp_J,sp_J,2026-03-13 08:00:00,,created,True
