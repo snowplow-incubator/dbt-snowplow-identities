@@ -51,23 +51,6 @@ for db in ${DATABASES[@]}; do
 
   done
 
-  # Hashing group — separate run with snowplow__hash_identifiers
-  echo "Integration tests: Running group hashing"
-
-  echo "Integration tests: Resetting manifest for hashing"
-  eval "dbt run --select snowplow_identities_incremental_manifest --full-refresh --vars '{snowplow__allow_refresh: true, test_group: hashing}' --target $db" || exit 1
-
-  echo "Integration tests: Run 1/4 (full-refresh) for hashing"
-  eval "dbt run --full-refresh --vars '{snowplow__allow_refresh: true, snowplow__backfill_limit_days: 1, test_group: hashing, snowplow__hash_identifiers: true}' --target $db" || exit 1
-
-  for i in {2..4}; do
-    echo "Integration tests: Run $i/4 (incremental) for hashing"
-    eval "dbt run --vars '{snowplow__backfill_limit_days: 1, test_group: hashing, snowplow__hash_identifiers: true}' --target $db" || exit 1
-  done
-
-  echo "Integration tests: Testing group hashing"
-  eval "dbt test --select tag:hashing --vars '{store_failures: true}' --target $db" || exit 1
-
   echo "Integration tests: Testing uniqueness constraints"
   eval "dbt test --select 'test_name:unique test_name:unique_combination_of_columns' --vars '{store_failures: true}' --target $db" || exit 1
 

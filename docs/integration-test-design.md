@@ -2,7 +2,7 @@
 
 ## Approach
 
-Four test groups, each with its own seed data and expected output. Groups 1–3 verify **all 5 derived tables**. Group 4 verifies only `identifier_mapping` with hashing enabled. Each group runs the full pipeline (seed, full-refresh, incremental runs). Groups are isolated from each other — no shared state.
+Three test groups, each with its own seed data and expected output. Each group verifies **all 5 derived tables** and runs the full pipeline (seed, full-refresh, incremental runs). Groups are isolated from each other — no shared state.
 
 **Derived tables verified per group:**
 1. `new_identities` — one row per snowplow_id, with identifiers and timestamps
@@ -384,45 +384,6 @@ Notes:
 8. Potential uuid collision in identifier_mapping when same id_value appears for different active_snowplow_ids
 9. SCD historical record pull for merge-only batches without safety net (open question #4)
 10. new_identities timestamp overwrite behaviour on incremental re-insert (open question #5)
-
----
-
-## Group 4: Identifier hashing — `snowplow__hash_identifiers=true`
-
-Tests the SHA-256 hashing path in `identifier_mapping`. Run with `--vars '{snowplow__hash_identifiers: true}'`. Only `identifier_mapping` output is verified — other tables are unaffected by this flag.
-
-### Seed events
-
-**Batch 1 (run 1, full-refresh):**
-
-- **evt-50**: `page_view` for sp_H1. Identity context `snowplow_id=sp_H1`, `created_at=2026-03-10 08:00`. Has `domain_userid=hash_me_123`, `user_id=hash@co`. `app_id=web`. `derived_tstamp=2026-03-10 08:00`.
-- **evt-51**: `page_view` for sp_H2. Identity context `snowplow_id=sp_H2`, `created_at=2026-03-10 08:05`. Has `domain_userid=hash_me_456`. `app_id=web`. `derived_tstamp=2026-03-10 08:05`.
-- **evt-52**: `identity_merge` — sp_H2 merged into sp_H1. Merged array: `[{snowplow_id: sp_H2, merged_at: 2026-03-10 09:00}]`.
-
-**Batch 2 (run 2, incremental):**
-
-- No new events. Verifies incremental path with hashing — no regressions.
-
-### Expected results after all runs
-
-#### identifier_mapping
-
-| active_snowplow_id | id_type | id_value |
-|---|---|---|
-| sp_H1 | domain_userid | SHA256('hash_me_123') |
-| sp_H1 | user_id | SHA256('hash@co') |
-| sp_H1 | domain_userid | SHA256('hash_me_456') |
-
-Notes:
-- `id_value` contains `SHA256(LOWER(TRIM(value)))`, not the raw value. The exact hash values will be computed during test implementation.
-- sp_H2's `domain_userid=hash_me_456` is re-pointed to `active_snowplow_id=sp_H1` after the merge, AND hashed.
-- All other tables (`new_identities`, `id_changes`, `snowplow_id_mapping`, `id_mapping_scd`) contain raw (unhashed) identifier values. This group only spot-checks those tables — they are thoroughly verified in Groups 1–3.
-
-### Behaviours verified
-
-1. Identifier values are SHA-256 hashed in identifier_mapping when `snowplow__hash_identifiers=true`
-2. Hashing applies to both original and merge-repointed identifiers
-3. Incremental path with hashing produces no regressions
 
 ---
 

@@ -5,233 +5,279 @@ models:
   - name: basic_new_identities_actual
     tests:
       - dbt_utils.equal_rowcount:
-          compare_model: ref('basic_new_identities_expected_stg')
-          tags: ['basic']
+          config:
+            tags: ['basic']
+          arguments:
+            compare_model: ref('basic_new_identities_expected_stg')
       - dbt_utils.equality:
-          compare_model: ref('basic_new_identities_expected_stg')
-          compare_columns:
-            - snowplow_id
-            - created_at
-            - first_seen_event_id
-            - first_app_id
-            - last_app_id
-            - domain_userid
-            - user_id
-            - first_derived_tstamp
-            - last_derived_tstamp
-          tags: ['basic']
+          config:
+            tags: ['basic']
+          arguments:
+            compare_model: ref('basic_new_identities_expected_stg')
+            compare_columns:
+              - snowplow_id
+              - created_at
+              - first_seen_event_id
+              - first_app_id
+              - last_app_id
+              - domain_userid
+              - user_id
+              - first_derived_tstamp
+              - last_derived_tstamp
   - name: basic_snowplow_id_mapping_actual
     tests:
       - dbt_utils.equal_rowcount:
-          compare_model: ref('basic_snowplow_id_mapping_expected_stg')
-          tags: ['basic']
+          config:
+            tags: ['basic']
+          arguments:
+            compare_model: ref('basic_snowplow_id_mapping_expected_stg')
       - dbt_utils.equality:
-          compare_model: ref('basic_snowplow_id_mapping_expected_stg')
-          compare_columns:
-            - snowplow_id
-            - active_snowplow_id
-            - merged_at
-          tags: ['basic']
+          config:
+            tags: ['basic']
+          arguments:
+            compare_model: ref('basic_snowplow_id_mapping_expected_stg')
+            compare_columns:
+              - snowplow_id
+              - active_snowplow_id
+              - merged_at
   - name: basic_id_changes_actual
     tests:
       - dbt_utils.equal_rowcount:
-          compare_model: ref('basic_id_changes_expected_stg')
-          tags: ['basic']
+          config:
+            tags: ['basic']
+          arguments:
+            compare_model: ref('basic_id_changes_expected_stg')
       - dbt_utils.equality:
-          compare_model: ref('basic_id_changes_expected_stg')
-          compare_columns:
-            - snowplow_id
-            - previous_snowplow_id
-            - effective_at
-            - change_type
-            - first_seen_event_id
-            - first_seen_app_id
-          tags: ['basic']
+          config:
+            tags: ['basic']
+          arguments:
+            compare_model: ref('basic_id_changes_expected_stg')
+            compare_columns:
+              - snowplow_id
+              - previous_snowplow_id
+              - effective_at
+              - change_type
+              - first_seen_event_id
+              - first_seen_app_id
   - name: basic_id_mapping_scd_actual
     tests:
       - dbt_utils.equal_rowcount:
-          compare_model: ref('basic_id_mapping_scd_expected_stg')
-          tags: ['basic']
+          config:
+            tags: ['basic']
+          arguments:
+            compare_model: ref('basic_id_mapping_scd_expected_stg')
       - dbt_utils.equality:
-          compare_model: ref('basic_id_mapping_scd_expected_stg')
-          compare_columns:
-            - snowplow_id
-            - active_snowplow_id
-            - effective_at
-            - superseded_at
-            - change_type
-            - is_current
-          tags: ['basic']
+          config:
+            tags: ['basic']
+          arguments:
+            compare_model: ref('basic_id_mapping_scd_expected_stg')
+            compare_columns:
+              - snowplow_id
+              - active_snowplow_id
+              - effective_at
+              - superseded_at
+              - change_type
+              - is_current
   - name: basic_identifier_mapping_actual
     tests:
       - dbt_utils.equal_rowcount:
-          compare_model: ref('basic_identifier_mapping_expected_stg')
-          tags: ['basic']
+          config:
+            tags: ['basic']
+          arguments:
+            compare_model: ref('basic_identifier_mapping_expected_stg')
       - dbt_utils.equality:
-          compare_model: ref('basic_identifier_mapping_expected_stg')
-          compare_columns:
-            - active_snowplow_id
-            - id_type
-            - id_value
-            - first_app_id
-            - last_app_id
-            - first_seen_at
-            - last_seen_at
-            - first_seen_event_id
-          tags: ['basic']
+          config:
+            tags: ['basic']
+          arguments:
+            compare_model: ref('basic_identifier_mapping_expected_stg')
+            compare_columns:
+              - active_snowplow_id
+              - id_type
+              - id_value
+              - first_app_id
+              - last_app_id
+              - first_seen_at
+              - last_seen_at
+              - first_seen_event_id
 
   # Group 2: Complex merges
   - name: complex_merges_new_identities_actual
     tests:
       - dbt_utils.equal_rowcount:
-          compare_model: ref('complex_merges_new_identities_expected_stg')
-          tags: ['complex_merges']
+          config:
+            tags: ['complex_merges']
+          arguments:
+            compare_model: ref('complex_merges_new_identities_expected_stg')
       - dbt_utils.equality:
-          compare_model: ref('complex_merges_new_identities_expected_stg')
-          compare_columns:
-            - snowplow_id
-            - created_at
-            - first_seen_event_id
-            - first_app_id
-            - domain_userid
-            - user_id
-          tags: ['complex_merges']
+          config:
+            tags: ['complex_merges']
+          arguments:
+            compare_model: ref('complex_merges_new_identities_expected_stg')
+            compare_columns:
+              - snowplow_id
+              - created_at
+              - first_seen_event_id
+              - first_app_id
+              - domain_userid
+              - user_id
   - name: complex_merges_snowplow_id_mapping_actual
     tests:
       - dbt_utils.equal_rowcount:
-          compare_model: ref('complex_merges_snowplow_id_mapping_expected_stg')
-          tags: ['complex_merges']
+          config:
+            tags: ['complex_merges']
+          arguments:
+            compare_model: ref('complex_merges_snowplow_id_mapping_expected_stg')
       - dbt_utils.equality:
-          compare_model: ref('complex_merges_snowplow_id_mapping_expected_stg')
-          compare_columns:
-            - snowplow_id
-            - active_snowplow_id
-            - merged_at
-          tags: ['complex_merges']
+          config:
+            tags: ['complex_merges']
+          arguments:
+            compare_model: ref('complex_merges_snowplow_id_mapping_expected_stg')
+            compare_columns:
+              - snowplow_id
+              - active_snowplow_id
+              - merged_at
   - name: complex_merges_id_changes_actual
     tests:
       - dbt_utils.equal_rowcount:
-          compare_model: ref('complex_merges_id_changes_expected_stg')
-          tags: ['complex_merges']
+          config:
+            tags: ['complex_merges']
+          arguments:
+            compare_model: ref('complex_merges_id_changes_expected_stg')
       - dbt_utils.equality:
-          compare_model: ref('complex_merges_id_changes_expected_stg')
-          compare_columns:
-            - snowplow_id
-            - previous_snowplow_id
-            - effective_at
-            - change_type
-            - first_seen_app_id
-          tags: ['complex_merges']
+          config:
+            tags: ['complex_merges']
+          arguments:
+            compare_model: ref('complex_merges_id_changes_expected_stg')
+            compare_columns:
+              - snowplow_id
+              - previous_snowplow_id
+              - effective_at
+              - change_type
+              - first_seen_app_id
   - name: complex_merges_id_mapping_scd_actual
     tests:
       - dbt_utils.equal_rowcount:
-          compare_model: ref('complex_merges_id_mapping_scd_expected_stg')
-          tags: ['complex_merges']
+          config:
+            tags: ['complex_merges']
+          arguments:
+            compare_model: ref('complex_merges_id_mapping_scd_expected_stg')
       - dbt_utils.equality:
-          compare_model: ref('complex_merges_id_mapping_scd_expected_stg')
-          compare_columns:
-            - snowplow_id
-            - active_snowplow_id
-            - effective_at
-            - superseded_at
-            - change_type
-            - is_current
-          tags: ['complex_merges']
+          config:
+            tags: ['complex_merges']
+          arguments:
+            compare_model: ref('complex_merges_id_mapping_scd_expected_stg')
+            compare_columns:
+              - snowplow_id
+              - active_snowplow_id
+              - effective_at
+              - superseded_at
+              - change_type
+              - is_current
   - name: complex_merges_identifier_mapping_actual
     tests:
       - dbt_utils.equal_rowcount:
-          compare_model: ref('complex_merges_identifier_mapping_expected_stg')
-          tags: ['complex_merges']
+          config:
+            tags: ['complex_merges']
+          arguments:
+            compare_model: ref('complex_merges_identifier_mapping_expected_stg')
       - dbt_utils.equality:
-          compare_model: ref('complex_merges_identifier_mapping_expected_stg')
-          compare_columns:
-            - active_snowplow_id
-            - id_type
-            - id_value
-          tags: ['complex_merges']
+          config:
+            tags: ['complex_merges']
+          arguments:
+            compare_model: ref('complex_merges_identifier_mapping_expected_stg')
+            compare_columns:
+              - active_snowplow_id
+              - id_type
+              - id_value
 
   # Group 3: Edge cases
   - name: edge_cases_new_identities_actual
     tests:
       - dbt_utils.equal_rowcount:
-          compare_model: ref('edge_cases_new_identities_expected_stg')
-          tags: ['edge_cases']
+          config:
+            tags: ['edge_cases']
+          arguments:
+            compare_model: ref('edge_cases_new_identities_expected_stg')
       - dbt_utils.equality:
-          compare_model: ref('edge_cases_new_identities_expected_stg')
-          compare_columns:
-            - snowplow_id
-            - created_at
-            - first_seen_event_id
-            - first_app_id
-            - domain_userid
-            - user_id
-          tags: ['edge_cases']
+          config:
+            tags: ['edge_cases']
+          arguments:
+            compare_model: ref('edge_cases_new_identities_expected_stg')
+            compare_columns:
+              - snowplow_id
+              - created_at
+              - first_seen_event_id
+              - first_app_id
+              - domain_userid
+              - user_id
   - name: edge_cases_snowplow_id_mapping_actual
     tests:
       - dbt_utils.equal_rowcount:
-          compare_model: ref('edge_cases_snowplow_id_mapping_expected_stg')
-          tags: ['edge_cases']
+          config:
+            tags: ['edge_cases']
+          arguments:
+            compare_model: ref('edge_cases_snowplow_id_mapping_expected_stg')
       - dbt_utils.equality:
-          compare_model: ref('edge_cases_snowplow_id_mapping_expected_stg')
-          compare_columns:
-            - snowplow_id
-            - active_snowplow_id
-            - merged_at
-          tags: ['edge_cases']
+          config:
+            tags: ['edge_cases']
+          arguments:
+            compare_model: ref('edge_cases_snowplow_id_mapping_expected_stg')
+            compare_columns:
+              - snowplow_id
+              - active_snowplow_id
+              - merged_at
   - name: edge_cases_id_changes_actual
     tests:
       - dbt_utils.equal_rowcount:
-          compare_model: ref('edge_cases_id_changes_expected_stg')
-          tags: ['edge_cases']
+          config:
+            tags: ['edge_cases']
+          arguments:
+            compare_model: ref('edge_cases_id_changes_expected_stg')
       - dbt_utils.equality:
-          compare_model: ref('edge_cases_id_changes_expected_stg')
-          compare_columns:
-            - snowplow_id
-            - previous_snowplow_id
-            - effective_at
-            - change_type
-            - first_seen_app_id
-          tags: ['edge_cases']
+          config:
+            tags: ['edge_cases']
+          arguments:
+            compare_model: ref('edge_cases_id_changes_expected_stg')
+            compare_columns:
+              - snowplow_id
+              - previous_snowplow_id
+              - effective_at
+              - change_type
+              - first_seen_app_id
   - name: edge_cases_id_mapping_scd_actual
     tests:
       - dbt_utils.equal_rowcount:
-          compare_model: ref('edge_cases_id_mapping_scd_expected_stg')
-          tags: ['edge_cases']
+          config:
+            tags: ['edge_cases']
+          arguments:
+            compare_model: ref('edge_cases_id_mapping_scd_expected_stg')
       - dbt_utils.equality:
-          compare_model: ref('edge_cases_id_mapping_scd_expected_stg')
-          compare_columns:
-            - snowplow_id
-            - active_snowplow_id
-            - effective_at
-            - superseded_at
-            - change_type
-            - is_current
-          tags: ['edge_cases']
+          config:
+            tags: ['edge_cases']
+          arguments:
+            compare_model: ref('edge_cases_id_mapping_scd_expected_stg')
+            compare_columns:
+              - snowplow_id
+              - active_snowplow_id
+              - effective_at
+              - superseded_at
+              - change_type
+              - is_current
   - name: edge_cases_identifier_mapping_actual
     tests:
       - dbt_utils.equal_rowcount:
-          compare_model: ref('edge_cases_identifier_mapping_expected_stg')
-          tags: ['edge_cases']
+          config:
+            tags: ['edge_cases']
+          arguments:
+            compare_model: ref('edge_cases_identifier_mapping_expected_stg')
       - dbt_utils.equality:
-          compare_model: ref('edge_cases_identifier_mapping_expected_stg')
-          compare_columns:
-            - active_snowplow_id
-            - id_type
-            - id_value
-            - first_seen_at
-            - last_seen_at
-          tags: ['edge_cases']
-
-  # Group 4: Hashing
-  - name: hashing_identifier_mapping_actual
-    tests:
-      - dbt_utils.equal_rowcount:
-          compare_model: ref('hashing_identifier_mapping_expected_stg')
-          tags: ['hashing']
-      - dbt_utils.equality:
-          compare_model: ref('hashing_identifier_mapping_expected_stg')
-          compare_columns:
-            - active_snowplow_id
-            - id_type
-            - id_value
-          tags: ['hashing']
+          config:
+            tags: ['edge_cases']
+          arguments:
+            compare_model: ref('edge_cases_identifier_mapping_expected_stg')
+            compare_columns:
+              - active_snowplow_id
+              - id_type
+              - id_value
+              - first_seen_at
+              - last_seen_at

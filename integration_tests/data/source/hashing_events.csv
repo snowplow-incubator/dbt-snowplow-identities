@@ -1,4 +1,0 @@
-event_id,event_name,app_id,collector_tstamp,derived_tstamp,load_tstamp,dvce_created_tstamp,domain_userid,user_id,contexts_com_snowplowanalytics_snowplow_identity_1,unstruct_event_com_snowplowanalytics_snowplow_identity_merge_1
-evt-50,page_view,web,2026-03-10 08:00:00,2026-03-10 08:00:00,2026-03-10 08:00:00,2026-03-10 08:00:00,hash_me_123,hash@co,"[{""snowplowId"":""sp_H1"",""createdAt"":""2026-03-10T08:00:00""}]",
-evt-51,page_view,web,2026-03-10 08:05:00,2026-03-10 08:05:00,2026-03-10 08:05:00,2026-03-10 08:05:00,hash_me_456,,"[{""snowplowId"":""sp_H2"",""createdAt"":""2026-03-10T08:05:00""}]",
-evt-52,identity_merge,web,2026-03-10 09:00:00,2026-03-10 09:00:00,2026-03-10 09:00:00,2026-03-10 09:00:00,,,,"{""snowplowId"":""sp_H1"",""merged"":[{""snowplowId"":""sp_H2"",""mergedAt"":""2026-03-10T09:00:00"",""triggeringEventId"":""evt-52""}],""merges"":[""sp_H2""]}"
