@@ -25,8 +25,14 @@ You may obtain a copy of the Snowplow Personal and Academic License Version 1.0 
 ) }}
 
 WITH ids_affected_this_run AS (
-    SELECT DISTINCT snowplow_id 
+    SELECT DISTINCT snowplow_id
     FROM {{ ref('snowplow_identities_id_changes_this_run') }}
+
+    UNION
+
+    SELECT DISTINCT previous_snowplow_id
+    FROM {{ ref('snowplow_identities_id_changes_this_run') }}
+    WHERE change_type = 'merged'
 )
 
 {% if is_incremental() %}
