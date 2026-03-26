@@ -20,9 +20,6 @@ unit_tests:
         - {id_change_key: 'key-aaa', snowplow_id: 'sp_AAAA', previous_snowplow_id: null, effective_at: '2025-12-18 10:00:00.000', changed_at: '2025-12-18 10:05:00.000', change_type: 'created', first_seen_event_id: 'evt-001', first_seen_app_id: 'web'}
         - {id_change_key: 'key-merge', snowplow_id: 'sp_AAAA', previous_snowplow_id: 'sp_BBBB', effective_at: '2025-12-18 10:02:00.000', changed_at: '2025-12-18 10:05:00.000', change_type: 'merged', first_seen_event_id: 'evt-003', first_seen_app_id: 'web'}
 
-  # FAILING — least(value, NULL) returns NULL in Snowflake, so
-  # effective_at and changed_at become NULL for new records with
-  # no matching id_change_key in the existing table.
   - name: test__snowplow_identities_id_changes__new_record_added
     description: >
       Incremental: sp_AAAA already exists in the table. A new record
