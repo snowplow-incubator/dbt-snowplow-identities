@@ -7,6 +7,9 @@ unit_tests:
       sp_AAAA is created with no merges. The SCD table should have one
       row: sp_AAAA maps to itself, is_current=true.
     model: snowplow_identities_id_mapping_scd
+    overrides:
+      macros:
+        is_incremental: false
     given:
       - input: ref('snowplow_identities_id_changes_this_run')
         rows:
@@ -23,6 +26,9 @@ unit_tests:
       sp_BBBB. The SCD table should show sp_AAAA's self-mapping
       superseded by the merge, and sp_BBBB's self-mapping current.
     model: snowplow_identities_id_mapping_scd
+    overrides:
+      macros:
+        is_incremental: false
     given:
       - input: ref('snowplow_identities_id_changes_this_run')
         rows:

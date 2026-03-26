@@ -8,6 +8,9 @@ unit_tests:
       are created, then sp_BBBB is merged into sp_AAAA. Both domain_userid
       values should resolve to active_snowplow_id=sp_AAAA.
     model: snowplow_identities_identifier_mapping_this_run
+    overrides:
+      macros:
+        is_incremental: false
     given:
       - input: ref('snowplow_identities_new_identities_this_run')
         rows:
@@ -27,6 +30,9 @@ unit_tests:
       sp_AAAA has both domain_userid and user_id set. UNPIVOT should
       produce two separate rows, one per identifier type.
     model: snowplow_identities_identifier_mapping_this_run
+    overrides:
+      macros:
+        is_incremental: false
     given:
       - input: ref('snowplow_identities_new_identities_this_run')
         rows:

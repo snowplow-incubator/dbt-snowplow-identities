@@ -6,9 +6,9 @@ unit_tests:
     description: >
       Non-incremental (first run): passes through id_changes_this_run as-is.
     model: snowplow_identities_id_changes
-    config:
     overrides:
       macros:
+        is_incremental: false
         snowplow_utils.is_run_with_new_events: "true"
     given:
       - input: ref('snowplow_identities_id_changes_this_run')
