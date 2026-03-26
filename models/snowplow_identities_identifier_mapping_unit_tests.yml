@@ -30,10 +30,6 @@ unit_tests:
       rows:
         - {uuid: 'uuid-bbb', active_snowplow_id: 'sp_AAAA', id_type: 'DOMAIN_USERID', id_value: 'user-bbb', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2025-12-18 10:00:00.000', last_seen_at: '2025-12-18 10:00:10.000', first_seen_event_id: 'evt-002'}
 
-  # FAILING — the derived model is a pass-through from _this_run with
-  # no incremental merge logic. When the same identifier is seen across
-  # two batches, the upsert overwrites first_seen_at with the new
-  # batch's value, losing the original earlier timestamp.
   - name: test__snowplow_identities_identifier_mapping__preserve_first_seen_at
     description: >
       A user visits on Monday (first_seen_at=Monday, last_seen_at=Monday).
@@ -49,6 +45,10 @@ unit_tests:
       - input: ref('snowplow_identities_identifier_mapping_this_run')
         rows:
           - {uuid: 'uuid-aaa', active_snowplow_id: 'sp_AAAA', id_type: 'DOMAIN_USERID', id_value: 'user-aaa', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2025-12-17 10:00:00.000', last_seen_at: '2025-12-19 14:00:00.000', first_seen_event_id: 'evt-wed'}
+      - input: ref('snowplow_identities_snowplow_id_mapping_this_run')
+        rows: []
+      - input: ref('snowplow_identities_snowplow_id_mapping')
+        rows: []
       - input: this
         rows:
           - {uuid: 'uuid-aaa', active_snowplow_id: 'sp_AAAA', id_type: 'DOMAIN_USERID', id_value: 'user-aaa', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2025-12-15 10:00:00.000', last_seen_at: '2025-12-15 10:00:00.000', first_seen_event_id: 'evt-mon'}
