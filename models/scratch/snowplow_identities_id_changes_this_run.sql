@@ -39,7 +39,7 @@ id_changes as (
 )
 
 select
-    {{ dbt_utils.generate_surrogate_key(['snowplow_id', 'previous_snowplow_id', 'effective_at']) }} as id_change_key,
+    {{ dbt_utils.generate_surrogate_key(['snowplow_id', 'previous_snowplow_id']) }} as id_change_key,
     snowplow_id,
     previous_snowplow_id,
     effective_at,
