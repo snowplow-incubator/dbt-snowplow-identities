@@ -1,0 +1,44 @@
+version: 2
+
+unit_tests:
+
+  - name: test__snowplow_identities_merge_events_this_run__simple_merge
+    description: >
+      One identity_merge event that merges sp_BBBB into sp_AAAA.
+    model: snowplow_identities_merge_events_this_run
+    config:
+      tags: ["snowflake_only"]
+    given:
+      - input: ref('snowplow_identities_base_events_this_run')
+        format: sql
+        rows: |
+          select
+            'evt-003' as event_id,
+            'identity_merge' as event_name,
+            '2025-12-18 10:02:00.000'::timestamp as derived_tstamp,
+            '2025-12-18 10:02:00.100'::timestamp as collector_tstamp,
+            parse_json('{"snowplowId":"sp_AAAA","createdAt":"2025-12-18T10:00:00.500Z","merged":[{"snowplowId":"sp_BBBB","createdAt":"2025-12-18T10:01:00.500Z","mergedAt":"2025-12-18T10:01:30.000Z","triggeringEventId":"evt-003"}],"merges":["sp_BBBB"]}') as unstruct_event_com_snowplowanalytics_snowplow_identity_merge_1
+    expect:
+      rows:
+        - {merge_event_id: 'evt-003', active_snowplow_id: 'sp_AAAA', collector_tstamp: '2025-12-18 10:02:00.100', derived_tstamp: '2025-12-18 10:02:00.000'}
+
+  - name: test__snowplow_identities_merge_events_this_run__multi_child_merge
+    description: >
+      A single merge event absorbs two IDs (sp_BBBB and sp_CCCC)
+      into sp_AAAA at once. Both absorbed IDs should be captured.
+    model: snowplow_identities_merge_events_this_run
+    config:
+      tags: ["snowflake_only"]
+    given:
+      - input: ref('snowplow_identities_base_events_this_run')
+        format: sql
+        rows: |
+          select
+            'evt-005' as event_id,
+            'identity_merge' as event_name,
+            '2025-12-18 10:03:00.000'::timestamp as derived_tstamp,
+            '2025-12-18 10:03:00.100'::timestamp as collector_tstamp,
+            parse_json('{"snowplowId":"sp_AAAA","createdAt":"2025-12-18T10:00:00.500Z","merged":[{"snowplowId":"sp_BBBB","createdAt":"2025-12-18T10:01:00.500Z","mergedAt":"2025-12-18T10:03:00.000Z","triggeringEventId":"evt-005"},{"snowplowId":"sp_CCCC","createdAt":"2025-12-18T10:01:30.500Z","mergedAt":"2025-12-18T10:03:00.000Z","triggeringEventId":"evt-005"}],"merges":["sp_BBBB","sp_CCCC"]}') as unstruct_event_com_snowplowanalytics_snowplow_identity_merge_1
+    expect:
+      rows:
+        - {merge_event_id: 'evt-005', active_snowplow_id: 'sp_AAAA', collector_tstamp: '2025-12-18 10:03:00.100', derived_tstamp: '2025-12-18 10:03:00.000'}

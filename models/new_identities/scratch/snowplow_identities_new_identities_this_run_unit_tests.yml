@@ -1,0 +1,84 @@
+version: 2
+
+unit_tests:
+
+  - name: test__snowplow_identities_new_identities_this_run__two_users_created
+    description: >
+      Two page_views create sp_AAAA and sp_BBBB.
+      Expects 2 identity rows with correct first/last timestamps.
+    model: snowplow_identities_new_identities_this_run
+    config:
+      tags: ["snowflake_only"]
+    given:
+      - input: ref('snowplow_identities_base_events_this_run')
+        format: sql
+        rows: |
+          select
+            'evt-001' as event_id,
+            'page_view' as event_name,
+            'web' as app_id,
+            'user-aaa' as domain_userid,
+            cast(null as varchar) as user_id,
+            '2025-12-18 10:00:00.000'::timestamp as derived_tstamp,
+            '2025-12-18 10:00:00.100'::timestamp as collector_tstamp,
+            parse_json('[{"snowplowId":"sp_AAAA","createdAt":"2025-12-18T10:00:00.500Z"}]') as contexts_com_snowplowanalytics_snowplow_identity_1
+          union all
+          select
+            'evt-002',
+            'page_view',
+            'web',
+            'user-bbb',
+            cast(null as varchar),
+            '2025-12-18 10:01:00.000'::timestamp,
+            '2025-12-18 10:01:00.100'::timestamp,
+            parse_json('[{"snowplowId":"sp_BBBB","createdAt":"2025-12-18T10:01:00.500Z"}]')
+    expect:
+      rows:
+        - {snowplow_id: 'sp_AAAA', created_at: '2025-12-18 10:00:00.500', first_seen_event_id: 'evt-001', first_app_id: 'web', last_app_id: 'web', domain_userid: 'user-aaa', user_id: null, first_derived_tstamp: '2025-12-18 10:00:00.000', last_derived_tstamp: '2025-12-18 10:00:00.000'}
+        - {snowplow_id: 'sp_BBBB', created_at: '2025-12-18 10:01:00.500', first_seen_event_id: 'evt-002', first_app_id: 'web', last_app_id: 'web', domain_userid: 'user-bbb', user_id: null, first_derived_tstamp: '2025-12-18 10:01:00.000', last_derived_tstamp: '2025-12-18 10:01:00.000'}
+
+  - name: test__snowplow_identities_new_identities_this_run__first_last_timestamps
+    description: >
+      Three events for the same sp_AAAA at different times across two apps.
+      first_derived_tstamp should come from the earliest event,
+      last_derived_tstamp from the latest. first_app_id and last_app_id
+      should reflect the apps of the earliest and latest events respectively.
+    model: snowplow_identities_new_identities_this_run
+    config:
+      tags: ["snowflake_only"]
+    given:
+      - input: ref('snowplow_identities_base_events_this_run')
+        format: sql
+        rows: |
+          select
+            'evt-010' as event_id,
+            'page_view' as event_name,
+            'web' as app_id,
+            'user-aaa' as domain_userid,
+            cast(null as varchar) as user_id,
+            '2025-12-18 10:00:00.000'::timestamp as derived_tstamp,
+            '2025-12-18 10:00:00.100'::timestamp as collector_tstamp,
+            parse_json('[{"snowplowId":"sp_AAAA","createdAt":"2025-12-18T10:00:00.500Z"}]') as contexts_com_snowplowanalytics_snowplow_identity_1
+          union all
+          select
+            'evt-011',
+            'page_view',
+            'web',
+            'user-aaa',
+            'login-123',
+            '2025-12-18 10:05:00.000'::timestamp,
+            '2025-12-18 10:05:00.100'::timestamp,
+            parse_json('[{"snowplowId":"sp_AAAA","createdAt":"2025-12-18T10:00:00.500Z"}]')
+          union all
+          select
+            'evt-012',
+            'page_view',
+            'ios',
+            'user-aaa',
+            'login-123',
+            '2025-12-18 10:10:00.000'::timestamp,
+            '2025-12-18 10:10:00.100'::timestamp,
+            parse_json('[{"snowplowId":"sp_AAAA","createdAt":"2025-12-18T10:00:00.500Z"}]')
+    expect:
+      rows:
+        - {snowplow_id: 'sp_AAAA', created_at: '2025-12-18 10:00:00.500', first_seen_event_id: 'evt-010', first_app_id: 'web', last_app_id: 'ios', domain_userid: 'user-aaa', user_id: 'login-123', first_derived_tstamp: '2025-12-18 10:00:00.000', last_derived_tstamp: '2025-12-18 10:10:00.000'}

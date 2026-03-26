@@ -1,0 +1,87 @@
+version: 2
+
+unit_tests:
+
+  - name: test__snowplow_identities_id_mapping_scd__identity_created_no_merges
+    description: >
+      sp_AAAA is created with no merges. The SCD table should have one
+      row: sp_AAAA maps to itself, is_current=true.
+    model: snowplow_identities_id_mapping_scd
+    given:
+      - input: ref('snowplow_identities_id_changes_this_run')
+        rows:
+          - {id_change_key: 'key-create-aaa', snowplow_id: 'sp_AAAA', previous_snowplow_id: null, effective_at: '2025-12-18 10:00:00.000', changed_at: '2025-12-18 10:05:00.000', change_type: 'created', first_seen_event_id: 'evt-001', first_seen_app_id: 'web'}
+      - input: ref('snowplow_identities_snowplow_id_mapping_this_run')
+        rows: []
+    expect:
+      rows:
+        - {id_change_key: 'key-create-aaa', snowplow_id: 'sp_AAAA', active_snowplow_id: 'sp_AAAA', effective_at: '2025-12-18 10:00:00.000', superseded_at: null, change_type: 'created', is_current: true}
+
+  - name: test__snowplow_identities_id_mapping_scd__created_then_merged
+    description: >
+      sp_AAAA and sp_BBBB are created, then sp_AAAA is merged into
+      sp_BBBB. The SCD table should show sp_AAAA's self-mapping
+      superseded by the merge, and sp_BBBB's self-mapping current.
+    model: snowplow_identities_id_mapping_scd
+    given:
+      - input: ref('snowplow_identities_id_changes_this_run')
+        rows:
+          - {id_change_key: 'key-create-aaa', snowplow_id: 'sp_AAAA', previous_snowplow_id: null, effective_at: '2025-12-18 10:00:00.000', changed_at: '2025-12-18 10:05:00.000', change_type: 'created', first_seen_event_id: 'evt-001', first_seen_app_id: 'web'}
+          - {id_change_key: 'key-create-bbb', snowplow_id: 'sp_BBBB', previous_snowplow_id: null, effective_at: '2025-12-18 10:01:00.000', changed_at: '2025-12-18 10:05:00.000', change_type: 'created', first_seen_event_id: 'evt-002', first_seen_app_id: 'web'}
+          - {id_change_key: 'key-merge-ab', snowplow_id: 'sp_BBBB', previous_snowplow_id: 'sp_AAAA', effective_at: '2025-12-18 10:02:00.000', changed_at: '2025-12-18 10:05:00.000', change_type: 'merged', first_seen_event_id: 'evt-003', first_seen_app_id: 'web'}
+      - input: ref('snowplow_identities_snowplow_id_mapping_this_run')
+        rows:
+          - {snowplow_id: 'sp_AAAA', active_snowplow_id: 'sp_BBBB', merged_at: '2025-12-18 10:02:00.000', model_tstamp: '2025-12-18 10:05:00.000'}
+    expect:
+      rows:
+        - {id_change_key: 'key-create-aaa', snowplow_id: 'sp_AAAA', active_snowplow_id: 'sp_AAAA', effective_at: '2025-12-18 10:00:00.000', superseded_at: '2025-12-18 10:02:00.000', change_type: 'created', is_current: false}
+        - {id_change_key: 'key-merge-ab', snowplow_id: 'sp_AAAA', active_snowplow_id: 'sp_BBBB', effective_at: '2025-12-18 10:02:00.000', superseded_at: null, change_type: 'merged', is_current: true}
+        - {id_change_key: 'key-create-bbb', snowplow_id: 'sp_BBBB', active_snowplow_id: 'sp_BBBB', effective_at: '2025-12-18 10:01:00.000', superseded_at: null, change_type: 'created', is_current: true}
+
+  - name: test__snowplow_identities_id_mapping_scd__incremental_new_merge
+    description: >
+      Incremental: sp_BBBB was created in batch 1. In batch 2, sp_AAAA
+      is created and merged into sp_BBBB. The SCD table should show
+      sp_AAAA's self-mapping superseded and the merge to sp_BBBB current.
+      sp_BBBB's existing creation record should remain current.
+    model: snowplow_identities_id_mapping_scd
+    overrides:
+      macros:
+        is_incremental: true
+    given:
+      - input: ref('snowplow_identities_id_changes_this_run')
+        rows:
+          - {id_change_key: 'key-create-aaa', snowplow_id: 'sp_AAAA', previous_snowplow_id: null, effective_at: '2025-12-18 10:00:00.000', changed_at: '2025-12-18 10:10:00.000', change_type: 'created', first_seen_event_id: 'evt-001', first_seen_app_id: 'web'}
+          - {id_change_key: 'key-merge-ab', snowplow_id: 'sp_BBBB', previous_snowplow_id: 'sp_AAAA', effective_at: '2025-12-18 10:02:00.000', changed_at: '2025-12-18 10:10:00.000', change_type: 'merged', first_seen_event_id: 'evt-003', first_seen_app_id: 'web'}
+      - input: ref('snowplow_identities_snowplow_id_mapping_this_run')
+        rows:
+          - {snowplow_id: 'sp_AAAA', active_snowplow_id: 'sp_BBBB', merged_at: '2025-12-18 10:02:00.000', model_tstamp: '2025-12-18 10:10:00.000'}
+      - input: this
+        rows:
+          - {id_change_key: 'key-create-bbb', snowplow_id: 'sp_BBBB', active_snowplow_id: 'sp_BBBB', effective_at: '2025-12-18 10:01:00.000', superseded_at: null, change_type: 'created', is_current: true}
+    expect:
+      rows:
+        - {id_change_key: 'key-create-aaa', snowplow_id: 'sp_AAAA', active_snowplow_id: 'sp_AAAA', effective_at: '2025-12-18 10:00:00.000', superseded_at: '2025-12-18 10:02:00.000', change_type: 'created', is_current: false}
+        - {id_change_key: 'key-merge-ab', snowplow_id: 'sp_AAAA', active_snowplow_id: 'sp_BBBB', effective_at: '2025-12-18 10:02:00.000', superseded_at: null, change_type: 'merged', is_current: true}
+        - {id_change_key: 'key-create-bbb', snowplow_id: 'sp_BBBB', active_snowplow_id: 'sp_BBBB', effective_at: '2025-12-18 10:01:00.000', superseded_at: null, change_type: 'created', is_current: true}
+
+  - name: test__snowplow_identities_id_mapping_scd__dedup_late_arriving
+    description: >
+      Incremental: the same identity creation for sp_AAAA is reprocessed
+      in a new batch. The SCD table should not create a duplicate row.
+    model: snowplow_identities_id_mapping_scd
+    overrides:
+      macros:
+        is_incremental: true
+    given:
+      - input: ref('snowplow_identities_id_changes_this_run')
+        rows:
+          - {id_change_key: 'key-create-aaa', snowplow_id: 'sp_AAAA', previous_snowplow_id: null, effective_at: '2025-12-18 10:00:00.000', changed_at: '2025-12-18 11:00:00.000', change_type: 'created', first_seen_event_id: 'evt-001', first_seen_app_id: 'web'}
+      - input: ref('snowplow_identities_snowplow_id_mapping_this_run')
+        rows: []
+      - input: this
+        rows:
+          - {id_change_key: 'key-create-aaa', snowplow_id: 'sp_AAAA', active_snowplow_id: 'sp_AAAA', effective_at: '2025-12-18 10:00:00.000', superseded_at: null, change_type: 'created', is_current: true}
+    expect:
+      rows:
+        - {id_change_key: 'key-create-aaa', snowplow_id: 'sp_AAAA', active_snowplow_id: 'sp_AAAA', effective_at: '2025-12-18 10:00:00.000', superseded_at: null, change_type: 'created', is_current: true}
