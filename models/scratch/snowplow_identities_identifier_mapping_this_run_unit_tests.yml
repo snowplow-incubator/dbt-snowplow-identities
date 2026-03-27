@@ -44,3 +44,29 @@ unit_tests:
       rows:
         - {active_snowplow_id: 'sp_AAAA', id_type: 'DOMAIN_USERID', id_value: 'user-aaa', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2025-12-18 10:00:00.000', last_seen_at: '2025-12-18 10:00:10.000', first_seen_event_id: 'evt-001'}
         - {active_snowplow_id: 'sp_AAAA', id_type: 'USER_ID', id_value: 'john@example.com', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2025-12-18 10:00:00.000', last_seen_at: '2025-12-18 10:00:10.000', first_seen_event_id: 'evt-001'}
+
+  # FAILING — documents expected behavior not yet implemented.
+  # The model currently reads from new_identities_this_run which aggregates
+  # to one row per snowplow_id. By that point, we've lost which event
+  # introduced which identifier. first_seen_event_id is the first event
+  # for the snowplow_id, not per identifier.
+  - name: test__snowplow_identities_identifier_mapping_this_run__first_seen_event_per_identifier
+    description: >
+      sp_AAAA has two events: evt-001 has domain_userid only, evt-002
+      adds user_id. After UNPIVOT, each identifier should get the
+      event_id of the event that actually introduced it:
+      domain_userid=user-aaa → evt-001, user_id=john123 → evt-002.
+    model: snowplow_identities_identifier_mapping_this_run
+    overrides:
+      macros:
+        is_incremental: false
+    given:
+      - input: ref('snowplow_identities_new_identities_this_run')
+        rows:
+          - {snowplow_id: 'sp_AAAA', created_at: '2025-12-18 10:00:00.500', first_seen_event_id: 'evt-001', first_app_id: 'web', last_app_id: 'mobile', domain_userid: 'user-aaa', user_id: 'john123', first_derived_tstamp: '2025-12-18 10:00:00.000', last_derived_tstamp: '2025-12-18 10:01:00.000'}
+      - input: ref('snowplow_identities_snowplow_id_mapping')
+        rows: []
+    expect:
+      rows:
+        - {active_snowplow_id: 'sp_AAAA', id_type: 'DOMAIN_USERID', id_value: 'user-aaa', first_app_id: 'web', last_app_id: 'mobile', first_seen_at: '2025-12-18 10:00:00.000', last_seen_at: '2025-12-18 10:01:00.000', first_seen_event_id: 'evt-001'}
+        - {active_snowplow_id: 'sp_AAAA', id_type: 'USER_ID', id_value: 'john123', first_app_id: 'web', last_app_id: 'mobile', first_seen_at: '2025-12-18 10:01:00.000', last_seen_at: '2025-12-18 10:01:00.000', first_seen_event_id: 'evt-002'}
