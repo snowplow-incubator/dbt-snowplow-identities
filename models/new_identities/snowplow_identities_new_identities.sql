@@ -34,7 +34,6 @@ with new_data as (
 merged as (
     select
         n.*,
-        t.snowplow_id is not null as existed_before,
         t.first_derived_tstamp < n.first_derived_tstamp as old_is_earlier,
         t.last_derived_tstamp > n.last_derived_tstamp as old_is_later,
         t.created_at as prev_created_at,
