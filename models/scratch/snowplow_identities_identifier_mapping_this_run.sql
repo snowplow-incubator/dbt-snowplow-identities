@@ -12,40 +12,22 @@ You may obtain a copy of the Snowplow Personal and Academic License Version 1.0 
   )
 }}
 
-{% set identifiers = var('snowplow__identifiers', [{'reference': 'domain_userid', 'alias': 'domain_userid'}, {'reference': 'user_id', 'alias': 'user_id'}]) %}
-{% set identifier_columns = identifiers | map(attribute='alias') | list %}
-
-with prep as (
-    SELECT
-        snowplow_id,
-        col_name AS id_type,
-        {% if var('snowplow__hash_identifiers', false) %}
-            to_hex(sha256(lower(trim(id)))) as id_value,
-        {% else %}
-            id as id_value,
-        {% endif %}
-        first_app_id,
-        last_app_id,
-        first_derived_tstamp,
-        last_derived_tstamp,
-        first_seen_event_id
-    FROM {{ ref('snowplow_identities_new_identities_this_run') }}
-    UNPIVOT(id FOR col_name IN ({{ identifier_columns | join(', ') }}))
-    WHERE id IS NOT NULL
-)
-
-, new_identifiers as (
+with new_identifiers as (
     select
         snowplow_id,
         id_type,
-        id_value,
+        {% if var('snowplow__hash_identifiers', false) %}
+            to_hex(sha256(lower(trim(id_value)))) as id_value,
+        {% else %}
+            id_value,
+        {% endif %}
         first_app_id,
         last_app_id,
         first_derived_tstamp,
         last_derived_tstamp,
         first_seen_event_id,
         {{ dbt_utils.generate_surrogate_key(['id_type', 'id_value']) }} as uuid
-    from prep
+    from {{ ref('snowplow_identities_new_identifiers_this_run') }}
 )
 
 , with_current_mapping as (

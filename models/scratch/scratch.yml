@@ -27,6 +27,28 @@ models:
         description: 'The event that triggered this change.'
       - name: first_seen_app_id
         description: 'The app_id where this change originated.'
+  - name: snowplow_identities_new_identifiers_this_run
+    description: >
+      Event-level UNPIVOT of identifier columns, aggregated per
+      (snowplow_id, id_type, id_value). Provides correct per-identifier
+      first_seen_event_id attribution.
+    columns:
+      - name: snowplow_id
+        description: 'The Snowplow identity ID from the event context.'
+      - name: id_type
+        description: 'The type of identifier (e.g., DOMAIN_USERID, USER_ID).'
+      - name: id_value
+        description: 'The identifier value.'
+      - name: first_seen_event_id
+        description: 'The first event that contributed this specific identifier.'
+      - name: first_app_id
+        description: 'The app_id of the first event where this identifier was observed.'
+      - name: last_app_id
+        description: 'The app_id of the last event where this identifier was observed.'
+      - name: first_derived_tstamp
+        description: 'The derived_tstamp of the first event where this identifier was observed.'
+      - name: last_derived_tstamp
+        description: 'The derived_tstamp of the last event where this identifier was observed.'
   - name: snowplow_identities_identifier_mapping_this_run
     description: '{{ doc("table_identifier_mapping_this_run") }}'
     columns:
