@@ -9,6 +9,7 @@ unit_tests:
     model: snowplow_identities_snowplow_id_mapping
     overrides:
       macros:
+        is_incremental: false
         snowplow_utils.is_run_with_new_events: "true"
     given:
       - input: ref('snowplow_identities_snowplow_id_mapping_this_run')
@@ -38,3 +39,202 @@ unit_tests:
     expect:
       rows:
         - {snowplow_id: 'sp_BBBB', active_snowplow_id: 'sp_CCCC', merged_at: '2025-12-19 14:00:00.000', model_tstamp: '2025-12-19 14:05:00.000'}
+
+  - name: test__snowplow_identities_snowplow_id_mapping__repoints_stale_parent
+    description: >
+      Incremental: sp_AAAA was previously merged into sp_BBBB. This run
+      merges sp_BBBB into sp_CCCC. Even though sp_AAAA did not appear in
+      this run's merge events, the model should follow the chain and
+      repoint sp_AAAA from sp_BBBB to sp_CCCC.
+    model: snowplow_identities_snowplow_id_mapping
+    overrides:
+      macros:
+        is_incremental: true
+        snowplow_utils.is_run_with_new_events: "true"
+    given:
+      - input: ref('snowplow_identities_snowplow_id_mapping_this_run')
+        rows:
+          - {snowplow_id: 'sp_BBBB', active_snowplow_id: 'sp_CCCC', merged_at: '2025-12-19 14:00:00.000', model_tstamp: '2025-12-19 14:05:00.000'}
+      - input: this
+        rows:
+          - {snowplow_id: 'sp_AAAA', active_snowplow_id: 'sp_BBBB', merged_at: '2025-12-18 10:00:00.000', model_tstamp: '2025-12-18 10:05:00.000'}
+    expect:
+      rows:
+        - {snowplow_id: 'sp_BBBB', active_snowplow_id: 'sp_CCCC', merged_at: '2025-12-19 14:00:00.000'}
+        - {snowplow_id: 'sp_AAAA', active_snowplow_id: 'sp_CCCC', merged_at: '2025-12-18 10:00:00.000'}
+
+  - name: test__snowplow_identities_snowplow_id_mapping__multi_hop_stale_chain
+    description: >
+      Incremental: sp_AAAA was previously merged into sp_BBBB, and
+      sp_CCCC was previously merged into sp_DDDD (from an older run).
+      This run merges sp_BBBB into sp_CCCC. The model should resolve
+      the full chain: both sp_AAAA and sp_BBBB should end up pointing
+      to sp_DDDD, because sp_CCCC itself was already merged into sp_DDDD.
+    model: snowplow_identities_snowplow_id_mapping
+    overrides:
+      macros:
+        is_incremental: true
+        snowplow_utils.is_run_with_new_events: "true"
+    given:
+      - input: ref('snowplow_identities_snowplow_id_mapping_this_run')
+        rows:
+          - {snowplow_id: 'sp_BBBB', active_snowplow_id: 'sp_CCCC', merged_at: '2025-12-20 08:00:00.000', model_tstamp: '2025-12-20 08:05:00.000'}
+      - input: this
+        rows:
+          - {snowplow_id: 'sp_AAAA', active_snowplow_id: 'sp_BBBB', merged_at: '2025-12-18 10:00:00.000', model_tstamp: '2025-12-18 10:05:00.000'}
+          - {snowplow_id: 'sp_CCCC', active_snowplow_id: 'sp_DDDD', merged_at: '2025-12-17 09:00:00.000', model_tstamp: '2025-12-17 09:05:00.000'}
+    expect:
+      rows:
+        - {snowplow_id: 'sp_BBBB', active_snowplow_id: 'sp_DDDD', merged_at: '2025-12-20 08:00:00.000'}
+        - {snowplow_id: 'sp_AAAA', active_snowplow_id: 'sp_DDDD', merged_at: '2025-12-18 10:00:00.000'}
+
+  - name: test__snowplow_identities_snowplow_id_mapping__forward_chain_within_same_run
+    description: >
+      Incremental: history has sp_AAAA → sp_BBBB. This run brings
+      sp_BBBB → sp_CCCC and sp_XXXX → sp_AAAA. Forward resolution
+      resolves sp_XXXX to sp_BBBB via history, but sp_BBBB is also a
+      child this run. sp_XXXX should end up pointing to sp_CCCC.
+    model: snowplow_identities_snowplow_id_mapping
+    overrides:
+      macros:
+        is_incremental: true
+        snowplow_utils.is_run_with_new_events: "true"
+    given:
+      - input: ref('snowplow_identities_snowplow_id_mapping_this_run')
+        rows:
+          - {snowplow_id: 'sp_BBBB', active_snowplow_id: 'sp_CCCC', merged_at: '2025-12-20 08:00:00.000', model_tstamp: '2025-12-20 08:05:00.000'}
+          - {snowplow_id: 'sp_XXXX', active_snowplow_id: 'sp_AAAA', merged_at: '2025-12-20 08:01:00.000', model_tstamp: '2025-12-20 08:05:00.000'}
+      - input: this
+        rows:
+          - {snowplow_id: 'sp_AAAA', active_snowplow_id: 'sp_BBBB', merged_at: '2025-12-18 10:00:00.000', model_tstamp: '2025-12-18 10:05:00.000'}
+    expect:
+      rows:
+        - {snowplow_id: 'sp_BBBB', active_snowplow_id: 'sp_CCCC', merged_at: '2025-12-20 08:00:00.000'}
+        - {snowplow_id: 'sp_XXXX', active_snowplow_id: 'sp_CCCC', merged_at: '2025-12-20 08:01:00.000'}
+        - {snowplow_id: 'sp_AAAA', active_snowplow_id: 'sp_CCCC', merged_at: '2025-12-18 10:00:00.000'}
+
+  - name: test__snowplow_identities_snowplow_id_mapping__fan_in_repoint
+    description: >
+      Incremental: history has sp_AAAA → sp_CCCC and sp_BBBB → sp_CCCC
+      (fan-in). This run merges sp_CCCC into sp_DDDD. Both sp_AAAA and
+      sp_BBBB should repoint to sp_DDDD.
+    model: snowplow_identities_snowplow_id_mapping
+    overrides:
+      macros:
+        is_incremental: true
+        snowplow_utils.is_run_with_new_events: "true"
+    given:
+      - input: ref('snowplow_identities_snowplow_id_mapping_this_run')
+        rows:
+          - {snowplow_id: 'sp_CCCC', active_snowplow_id: 'sp_DDDD', merged_at: '2025-12-20 08:00:00.000', model_tstamp: '2025-12-20 08:05:00.000'}
+      - input: this
+        rows:
+          - {snowplow_id: 'sp_AAAA', active_snowplow_id: 'sp_CCCC', merged_at: '2025-12-18 10:00:00.000', model_tstamp: '2025-12-18 10:05:00.000'}
+          - {snowplow_id: 'sp_BBBB', active_snowplow_id: 'sp_CCCC', merged_at: '2025-12-18 11:00:00.000', model_tstamp: '2025-12-18 11:05:00.000'}
+    expect:
+      rows:
+        - {snowplow_id: 'sp_CCCC', active_snowplow_id: 'sp_DDDD', merged_at: '2025-12-20 08:00:00.000'}
+        - {snowplow_id: 'sp_AAAA', active_snowplow_id: 'sp_DDDD', merged_at: '2025-12-18 10:00:00.000'}
+        - {snowplow_id: 'sp_BBBB', active_snowplow_id: 'sp_DDDD', merged_at: '2025-12-18 11:00:00.000'}
+
+  - name: test__snowplow_identities_snowplow_id_mapping__disjoint_cross_run
+    description: >
+      Incremental: history has sp_AAAA → sp_BBBB. This run brings an
+      unrelated merge sp_CCCC → sp_DDDD. The two groups should not
+      interfere with each other.
+    model: snowplow_identities_snowplow_id_mapping
+    overrides:
+      macros:
+        is_incremental: true
+        snowplow_utils.is_run_with_new_events: "true"
+    given:
+      - input: ref('snowplow_identities_snowplow_id_mapping_this_run')
+        rows:
+          - {snowplow_id: 'sp_CCCC', active_snowplow_id: 'sp_DDDD', merged_at: '2025-12-20 08:00:00.000', model_tstamp: '2025-12-20 08:05:00.000'}
+      - input: this
+        rows:
+          - {snowplow_id: 'sp_AAAA', active_snowplow_id: 'sp_BBBB', merged_at: '2025-12-18 10:00:00.000', model_tstamp: '2025-12-18 10:05:00.000'}
+    expect:
+      rows:
+        - {snowplow_id: 'sp_CCCC', active_snowplow_id: 'sp_DDDD', merged_at: '2025-12-20 08:00:00.000'}
+
+  - name: test__snowplow_identities_snowplow_id_mapping__fan_out_into_history
+    description: >
+      Incremental: history has sp_AAAA → sp_XXXX. This run brings
+      sp_BBBB → sp_AAAA and sp_CCCC → sp_AAAA (fan-out into a
+      historical child). Both sp_BBBB and sp_CCCC should resolve to
+      sp_XXXX via the historical lookup on sp_AAAA.
+    model: snowplow_identities_snowplow_id_mapping
+    overrides:
+      macros:
+        is_incremental: true
+        snowplow_utils.is_run_with_new_events: "true"
+    given:
+      - input: ref('snowplow_identities_snowplow_id_mapping_this_run')
+        rows:
+          - {snowplow_id: 'sp_BBBB', active_snowplow_id: 'sp_AAAA', merged_at: '2025-12-20 08:00:00.000', model_tstamp: '2025-12-20 08:05:00.000'}
+          - {snowplow_id: 'sp_CCCC', active_snowplow_id: 'sp_AAAA', merged_at: '2025-12-20 08:01:00.000', model_tstamp: '2025-12-20 08:05:00.000'}
+      - input: this
+        rows:
+          - {snowplow_id: 'sp_AAAA', active_snowplow_id: 'sp_XXXX', merged_at: '2025-12-18 10:00:00.000', model_tstamp: '2025-12-18 10:05:00.000'}
+    expect:
+      rows:
+        - {snowplow_id: 'sp_BBBB', active_snowplow_id: 'sp_XXXX', merged_at: '2025-12-20 08:00:00.000'}
+        - {snowplow_id: 'sp_CCCC', active_snowplow_id: 'sp_XXXX', merged_at: '2025-12-20 08:01:00.000'}
+
+  - name: test__snowplow_identities_snowplow_id_mapping__diamond_cross_run
+    description: >
+      Incremental: history has sp_AAAA → sp_BBBB. This run brings
+      sp_AAAA → sp_CCCC, sp_BBBB → sp_DDDD, and sp_CCCC → sp_DDDD.
+      After within-run resolution, sp_AAAA → sp_DDDD, sp_BBBB → sp_DDDD,
+      sp_CCCC → sp_DDDD. The historical sp_AAAA row should be superseded.
+    model: snowplow_identities_snowplow_id_mapping
+    overrides:
+      macros:
+        is_incremental: true
+        snowplow_utils.is_run_with_new_events: "true"
+    given:
+      - input: ref('snowplow_identities_snowplow_id_mapping_this_run')
+        rows:
+          - {snowplow_id: 'sp_AAAA', active_snowplow_id: 'sp_DDDD', merged_at: '2025-12-20 08:00:00.000', model_tstamp: '2025-12-20 08:05:00.000'}
+          - {snowplow_id: 'sp_BBBB', active_snowplow_id: 'sp_DDDD', merged_at: '2025-12-20 08:01:00.000', model_tstamp: '2025-12-20 08:05:00.000'}
+          - {snowplow_id: 'sp_CCCC', active_snowplow_id: 'sp_DDDD', merged_at: '2025-12-20 08:02:00.000', model_tstamp: '2025-12-20 08:05:00.000'}
+      - input: this
+        rows:
+          - {snowplow_id: 'sp_AAAA', active_snowplow_id: 'sp_BBBB', merged_at: '2025-12-18 10:00:00.000', model_tstamp: '2025-12-18 10:05:00.000'}
+    expect:
+      rows:
+        - {snowplow_id: 'sp_AAAA', active_snowplow_id: 'sp_DDDD', merged_at: '2025-12-20 08:00:00.000'}
+        - {snowplow_id: 'sp_BBBB', active_snowplow_id: 'sp_DDDD', merged_at: '2025-12-20 08:01:00.000'}
+        - {snowplow_id: 'sp_CCCC', active_snowplow_id: 'sp_DDDD', merged_at: '2025-12-20 08:02:00.000'}
+
+  - name: test__snowplow_identities_snowplow_id_mapping__alternating_chain
+    description: >
+      Incremental: history has sp_AAAA → sp_BBBB, sp_CCCC → sp_DDDD,
+      and sp_EEEE → sp_FFFF. This run brings sp_BBBB → sp_CCCC,
+      sp_DDDD → sp_EEEE, and sp_XXXX → sp_AAAA. The chain alternates
+      between history and new mappings multiple times. All children
+      should resolve to sp_FFFF.
+    model: snowplow_identities_snowplow_id_mapping
+    overrides:
+      macros:
+        is_incremental: true
+        snowplow_utils.is_run_with_new_events: "true"
+    given:
+      - input: ref('snowplow_identities_snowplow_id_mapping_this_run')
+        rows:
+          - {snowplow_id: 'sp_BBBB', active_snowplow_id: 'sp_CCCC', merged_at: '2025-12-20 08:00:00.000', model_tstamp: '2025-12-20 08:05:00.000'}
+          - {snowplow_id: 'sp_DDDD', active_snowplow_id: 'sp_EEEE', merged_at: '2025-12-20 08:01:00.000', model_tstamp: '2025-12-20 08:05:00.000'}
+          - {snowplow_id: 'sp_XXXX', active_snowplow_id: 'sp_AAAA', merged_at: '2025-12-20 08:02:00.000', model_tstamp: '2025-12-20 08:05:00.000'}
+      - input: this
+        rows:
+          - {snowplow_id: 'sp_AAAA', active_snowplow_id: 'sp_BBBB', merged_at: '2025-12-18 10:00:00.000', model_tstamp: '2025-12-18 10:05:00.000'}
+          - {snowplow_id: 'sp_CCCC', active_snowplow_id: 'sp_DDDD', merged_at: '2025-12-17 09:00:00.000', model_tstamp: '2025-12-17 09:05:00.000'}
+          - {snowplow_id: 'sp_EEEE', active_snowplow_id: 'sp_FFFF', merged_at: '2025-12-16 08:00:00.000', model_tstamp: '2025-12-16 08:05:00.000'}
+    expect:
+      rows:
+        - {snowplow_id: 'sp_BBBB', active_snowplow_id: 'sp_FFFF', merged_at: '2025-12-20 08:00:00.000'}
+        - {snowplow_id: 'sp_DDDD', active_snowplow_id: 'sp_FFFF', merged_at: '2025-12-20 08:01:00.000'}
+        - {snowplow_id: 'sp_XXXX', active_snowplow_id: 'sp_FFFF', merged_at: '2025-12-20 08:02:00.000'}
+        - {snowplow_id: 'sp_AAAA', active_snowplow_id: 'sp_FFFF', merged_at: '2025-12-18 10:00:00.000'}
+        - {snowplow_id: 'sp_CCCC', active_snowplow_id: 'sp_FFFF', merged_at: '2025-12-17 09:00:00.000'}
