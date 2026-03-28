@@ -26,11 +26,6 @@ unit_tests:
       rows:
         - {snowplow_id: 'sp_BBBB', active_snowplow_id: 'sp_AAAA', merged_at: '2025-12-18 10:02:00.000'}
 
-  # FAILING — documents expected behavior not yet implemented.
-  # Each merge event only knows its direct merges. When sp_AAAA→sp_BBBB
-  # and then sp_BBBB→sp_CCCC arrive as separate events, the model should
-  # resolve both to sp_CCCC. Currently sp_AAAA is dropped because sp_BBBB
-  # is not a "true parent".
   - name: test__snowplow_identities_snowplow_id_mapping_this_run__transitive_chain
     description: >
       Transitive merge chain: sp_AAAA merged into sp_BBBB (evt-010),
@@ -65,3 +60,180 @@ unit_tests:
       rows:
         - {snowplow_id: 'sp_AAAA', active_snowplow_id: 'sp_CCCC', merged_at: '2025-12-18 10:02:00.000'}
         - {snowplow_id: 'sp_BBBB', active_snowplow_id: 'sp_CCCC', merged_at: '2025-12-18 10:05:00.000'}
+
+  - name: test__snowplow_identities_snowplow_id_mapping_this_run__fan_in
+    description: >
+      Fan-in: two children sp_BBBB and sp_CCCC both merge into sp_AAAA
+      in separate events. Expects two independent mapping rows pointing
+      to the same parent.
+    model: snowplow_identities_snowplow_id_mapping_this_run
+    config:
+      tags: ["snowflake_only"]
+    given:
+      - input: ref('snowplow_identities_merge_events_this_run')
+        format: sql
+        rows: |
+          select
+            'evt-001' as merge_event_id,
+            'sp_AAAA' as active_snowplow_id,
+            parse_json('[{"snowplowId":"sp_BBBB","createdAt":"2025-12-18T10:00:00.500Z","mergedAt":"2025-12-18T10:02:00.000Z","triggeringEventId":"evt-001"}]') as merged,
+            parse_json('["sp_BBBB"]') as merges,
+            '2025-12-18 10:02:00.100'::timestamp as collector_tstamp,
+            '2025-12-18 10:02:00.000'::timestamp as derived_tstamp
+          union all
+          select
+            'evt-002',
+            'sp_AAAA',
+            parse_json('[{"snowplowId":"sp_CCCC","createdAt":"2025-12-18T10:01:00.500Z","mergedAt":"2025-12-18T10:03:00.000Z","triggeringEventId":"evt-002"}]'),
+            parse_json('["sp_CCCC"]'),
+            '2025-12-18 10:03:00.100'::timestamp,
+            '2025-12-18 10:03:00.000'::timestamp
+    expect:
+      rows:
+        - {snowplow_id: 'sp_BBBB', active_snowplow_id: 'sp_AAAA', merged_at: '2025-12-18 10:02:00.000'}
+        - {snowplow_id: 'sp_CCCC', active_snowplow_id: 'sp_AAAA', merged_at: '2025-12-18 10:03:00.000'}
+
+  - name: test__snowplow_identities_snowplow_id_mapping_this_run__fan_out_single_event
+    description: >
+      Fan-out from one event: a single merge event absorbs two children
+      sp_BBBB and sp_CCCC into sp_AAAA via the merged array. Expects
+      two mapping rows from one event.
+    model: snowplow_identities_snowplow_id_mapping_this_run
+    config:
+      tags: ["snowflake_only"]
+    given:
+      - input: ref('snowplow_identities_merge_events_this_run')
+        format: sql
+        rows: |
+          select
+            'evt-001' as merge_event_id,
+            'sp_AAAA' as active_snowplow_id,
+            parse_json('[{"snowplowId":"sp_BBBB","createdAt":"2025-12-18T10:00:00.500Z","mergedAt":"2025-12-18T10:02:00.000Z","triggeringEventId":"evt-001"},{"snowplowId":"sp_CCCC","createdAt":"2025-12-18T10:00:00.500Z","mergedAt":"2025-12-18T10:02:00.000Z","triggeringEventId":"evt-001"}]') as merged,
+            parse_json('["sp_BBBB","sp_CCCC"]') as merges,
+            '2025-12-18 10:02:00.100'::timestamp as collector_tstamp,
+            '2025-12-18 10:02:00.000'::timestamp as derived_tstamp
+    expect:
+      rows:
+        - {snowplow_id: 'sp_BBBB', active_snowplow_id: 'sp_AAAA', merged_at: '2025-12-18 10:02:00.000'}
+        - {snowplow_id: 'sp_CCCC', active_snowplow_id: 'sp_AAAA', merged_at: '2025-12-18 10:02:00.000'}
+
+  - name: test__snowplow_identities_snowplow_id_mapping_this_run__long_chain
+    description: >
+      Long transitive chain: sp_AAAA → sp_BBBB → sp_CCCC → sp_DDDD
+      across three merge events. All children should resolve to sp_DDDD.
+    model: snowplow_identities_snowplow_id_mapping_this_run
+    config:
+      tags: ["snowflake_only"]
+    given:
+      - input: ref('snowplow_identities_merge_events_this_run')
+        format: sql
+        rows: |
+          select
+            'evt-010' as merge_event_id,
+            'sp_BBBB' as active_snowplow_id,
+            parse_json('[{"snowplowId":"sp_AAAA","createdAt":"2025-12-18T10:00:00.500Z","mergedAt":"2025-12-18T10:02:00.000Z","triggeringEventId":"evt-010"}]') as merged,
+            parse_json('["sp_AAAA"]') as merges,
+            '2025-12-18 10:02:00.100'::timestamp as collector_tstamp,
+            '2025-12-18 10:02:00.000'::timestamp as derived_tstamp
+          union all
+          select
+            'evt-020',
+            'sp_CCCC',
+            parse_json('[{"snowplowId":"sp_BBBB","createdAt":"2025-12-18T10:01:00.500Z","mergedAt":"2025-12-18T10:05:00.000Z","triggeringEventId":"evt-020"}]'),
+            parse_json('["sp_BBBB"]'),
+            '2025-12-18 10:05:00.100'::timestamp,
+            '2025-12-18 10:05:00.000'::timestamp
+          union all
+          select
+            'evt-030',
+            'sp_DDDD',
+            parse_json('[{"snowplowId":"sp_CCCC","createdAt":"2025-12-18T10:02:00.500Z","mergedAt":"2025-12-18T10:08:00.000Z","triggeringEventId":"evt-030"}]'),
+            parse_json('["sp_CCCC"]'),
+            '2025-12-18 10:08:00.100'::timestamp,
+            '2025-12-18 10:08:00.000'::timestamp
+    expect:
+      rows:
+        - {snowplow_id: 'sp_AAAA', active_snowplow_id: 'sp_DDDD', merged_at: '2025-12-18 10:02:00.000'}
+        - {snowplow_id: 'sp_BBBB', active_snowplow_id: 'sp_DDDD', merged_at: '2025-12-18 10:05:00.000'}
+        - {snowplow_id: 'sp_CCCC', active_snowplow_id: 'sp_DDDD', merged_at: '2025-12-18 10:08:00.000'}
+
+  - name: test__snowplow_identities_snowplow_id_mapping_this_run__diamond
+    description: >
+      Diamond merge: sp_AAAA → sp_BBBB and sp_AAAA → sp_CCCC, then both
+      sp_BBBB → sp_DDDD and sp_CCCC → sp_DDDD. All children should
+      resolve to sp_DDDD without duplicates.
+    model: snowplow_identities_snowplow_id_mapping_this_run
+    config:
+      tags: ["snowflake_only"]
+    given:
+      - input: ref('snowplow_identities_merge_events_this_run')
+        format: sql
+        rows: |
+          select
+            'evt-010' as merge_event_id,
+            'sp_BBBB' as active_snowplow_id,
+            parse_json('[{"snowplowId":"sp_AAAA","createdAt":"2025-12-18T10:00:00.500Z","mergedAt":"2025-12-18T10:02:00.000Z","triggeringEventId":"evt-010"}]') as merged,
+            parse_json('["sp_AAAA"]') as merges,
+            '2025-12-18 10:02:00.100'::timestamp as collector_tstamp,
+            '2025-12-18 10:02:00.000'::timestamp as derived_tstamp
+          union all
+          select
+            'evt-020',
+            'sp_CCCC',
+            parse_json('[{"snowplowId":"sp_AAAA","createdAt":"2025-12-18T10:00:00.500Z","mergedAt":"2025-12-18T10:03:00.000Z","triggeringEventId":"evt-020"}]'),
+            parse_json('["sp_AAAA"]'),
+            '2025-12-18 10:03:00.100'::timestamp,
+            '2025-12-18 10:03:00.000'::timestamp
+          union all
+          select
+            'evt-030',
+            'sp_DDDD',
+            parse_json('[{"snowplowId":"sp_BBBB","createdAt":"2025-12-18T10:01:00.500Z","mergedAt":"2025-12-18T10:05:00.000Z","triggeringEventId":"evt-030"}]'),
+            parse_json('["sp_BBBB"]'),
+            '2025-12-18 10:05:00.100'::timestamp,
+            '2025-12-18 10:05:00.000'::timestamp
+          union all
+          select
+            'evt-040',
+            'sp_DDDD',
+            parse_json('[{"snowplowId":"sp_CCCC","createdAt":"2025-12-18T10:01:00.500Z","mergedAt":"2025-12-18T10:06:00.000Z","triggeringEventId":"evt-040"}]'),
+            parse_json('["sp_CCCC"]'),
+            '2025-12-18 10:06:00.100'::timestamp,
+            '2025-12-18 10:06:00.000'::timestamp
+    expect:
+      rows:
+        - {snowplow_id: 'sp_AAAA', active_snowplow_id: 'sp_DDDD', merged_at: '2025-12-18 10:03:00.000'}
+        - {snowplow_id: 'sp_BBBB', active_snowplow_id: 'sp_DDDD', merged_at: '2025-12-18 10:05:00.000'}
+        - {snowplow_id: 'sp_CCCC', active_snowplow_id: 'sp_DDDD', merged_at: '2025-12-18 10:06:00.000'}
+
+  - name: test__snowplow_identities_snowplow_id_mapping_this_run__disjoint
+    description: >
+      Disjoint merges: sp_BBBB → sp_AAAA and sp_DDDD → sp_CCCC in the
+      same run, with no connection between the two groups. Expects two
+      independent mapping rows.
+    model: snowplow_identities_snowplow_id_mapping_this_run
+    config:
+      tags: ["snowflake_only"]
+    given:
+      - input: ref('snowplow_identities_merge_events_this_run')
+        format: sql
+        rows: |
+          select
+            'evt-001' as merge_event_id,
+            'sp_AAAA' as active_snowplow_id,
+            parse_json('[{"snowplowId":"sp_BBBB","createdAt":"2025-12-18T10:00:00.500Z","mergedAt":"2025-12-18T10:02:00.000Z","triggeringEventId":"evt-001"}]') as merged,
+            parse_json('["sp_BBBB"]') as merges,
+            '2025-12-18 10:02:00.100'::timestamp as collector_tstamp,
+            '2025-12-18 10:02:00.000'::timestamp as derived_tstamp
+          union all
+          select
+            'evt-002',
+            'sp_CCCC',
+            parse_json('[{"snowplowId":"sp_DDDD","createdAt":"2025-12-18T10:01:00.500Z","mergedAt":"2025-12-18T10:03:00.000Z","triggeringEventId":"evt-002"}]'),
+            parse_json('["sp_DDDD"]'),
+            '2025-12-18 10:03:00.100'::timestamp,
+            '2025-12-18 10:03:00.000'::timestamp
+    expect:
+      rows:
+        - {snowplow_id: 'sp_BBBB', active_snowplow_id: 'sp_AAAA', merged_at: '2025-12-18 10:02:00.000'}
+        - {snowplow_id: 'sp_DDDD', active_snowplow_id: 'sp_CCCC', merged_at: '2025-12-18 10:03:00.000'}
