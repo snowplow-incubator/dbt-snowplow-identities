@@ -60,6 +60,7 @@ vars:
     snowplow__hash_identifiers: false # Set to true to hash identifiers before processing (recommended for PII compliance)
     snowplow__identifiers: [{'reference': 'domain_userid', 'alias': 'domain_userid'}, {'reference': 'user_id', 'alias': 'user_id'}] # List of identifiers to process.
     snowplow__backfill_limit_days: 30
+    snowplow__max_merge_depth: 20 # Maximum number of hops to follow when resolving transitive merge chains
     # filter your data:
     snowplow__app_id: []
 
