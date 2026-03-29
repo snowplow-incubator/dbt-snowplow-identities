@@ -25,6 +25,8 @@ unit_tests:
       merge remaps sp_BBBB to sp_CCCC. The mapping should be updated
       to the new parent.
     model: snowplow_identities_snowplow_id_mapping
+    config:
+      tags: ["snowflake_only"]
     overrides:
       macros:
         is_incremental: true
@@ -47,6 +49,8 @@ unit_tests:
       this run's merge events, the model should follow the chain and
       repoint sp_AAAA from sp_BBBB to sp_CCCC.
     model: snowplow_identities_snowplow_id_mapping
+    config:
+      tags: ["snowflake_only"]
     overrides:
       macros:
         is_incremental: true
@@ -71,6 +75,8 @@ unit_tests:
       the full chain: both sp_AAAA and sp_BBBB should end up pointing
       to sp_DDDD, because sp_CCCC itself was already merged into sp_DDDD.
     model: snowplow_identities_snowplow_id_mapping
+    config:
+      tags: ["snowflake_only"]
     overrides:
       macros:
         is_incremental: true
@@ -95,6 +101,8 @@ unit_tests:
       resolves sp_XXXX to sp_BBBB via history, but sp_BBBB is also a
       child this run. sp_XXXX should end up pointing to sp_CCCC.
     model: snowplow_identities_snowplow_id_mapping
+    config:
+      tags: ["snowflake_only"]
     overrides:
       macros:
         is_incremental: true
@@ -119,6 +127,8 @@ unit_tests:
       (fan-in). This run merges sp_CCCC into sp_DDDD. Both sp_AAAA and
       sp_BBBB should repoint to sp_DDDD.
     model: snowplow_identities_snowplow_id_mapping
+    config:
+      tags: ["snowflake_only"]
     overrides:
       macros:
         is_incremental: true
@@ -143,6 +153,8 @@ unit_tests:
       unrelated merge sp_CCCC → sp_DDDD. The two groups should not
       interfere with each other.
     model: snowplow_identities_snowplow_id_mapping
+    config:
+      tags: ["snowflake_only"]
     overrides:
       macros:
         is_incremental: true
@@ -165,6 +177,8 @@ unit_tests:
       historical child). Both sp_BBBB and sp_CCCC should resolve to
       sp_XXXX via the historical lookup on sp_AAAA.
     model: snowplow_identities_snowplow_id_mapping
+    config:
+      tags: ["snowflake_only"]
     overrides:
       macros:
         is_incremental: true
@@ -189,6 +203,8 @@ unit_tests:
       After within-run resolution, sp_AAAA → sp_DDDD, sp_BBBB → sp_DDDD,
       sp_CCCC → sp_DDDD. The historical sp_AAAA row should be superseded.
     model: snowplow_identities_snowplow_id_mapping
+    config:
+      tags: ["snowflake_only"]
     overrides:
       macros:
         is_incremental: true
@@ -216,6 +232,8 @@ unit_tests:
       between history and new mappings multiple times. All children
       should resolve to sp_FFFF.
     model: snowplow_identities_snowplow_id_mapping
+    config:
+      tags: ["snowflake_only"]
     overrides:
       macros:
         is_incremental: true
