@@ -1,0 +1,8 @@
+version: 2
+
+sources:
+  - name: atomic
+    schema: "{{ target.schema ~ '_snplw_identities_int_tests' }}"
+    tables:
+      - name: events
+        identifier: snowplow_identities_events_stg
