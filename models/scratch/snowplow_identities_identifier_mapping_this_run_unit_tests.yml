@@ -1,0 +1,46 @@
+version: 2
+
+unit_tests:
+
+  - name: test__snowplow_identities_identifier_mapping_this_run__two_users_merged
+    description: >
+      sp_AAAA (domain_userid=user-aaa) and sp_BBBB (domain_userid=user-bbb)
+      are created, then sp_BBBB is merged into sp_AAAA. Both domain_userid
+      values should resolve to active_snowplow_id=sp_AAAA.
+    model: snowplow_identities_identifier_mapping_this_run
+    overrides:
+      macros:
+        is_incremental: false
+    given:
+      - input: ref('snowplow_identities_new_identities_this_run')
+        rows:
+          - {snowplow_id: 'sp_AAAA', created_at: '2025-12-18 10:00:00.500', first_seen_event_id: 'evt-001', first_app_id: 'web', last_app_id: 'web', domain_userid: 'user-aaa', user_id: null, first_derived_tstamp: '2025-12-18 10:00:00.000', last_derived_tstamp: '2025-12-18 10:00:10.000'}
+          - {snowplow_id: 'sp_BBBB', created_at: '2025-12-18 10:01:00.500', first_seen_event_id: 'evt-002', first_app_id: 'web', last_app_id: 'web', domain_userid: 'user-bbb', user_id: null, first_derived_tstamp: '2025-12-18 10:01:00.000', last_derived_tstamp: '2025-12-18 10:01:10.000'}
+      - input: ref('snowplow_identities_snowplow_id_mapping')
+        rows:
+          - {snowplow_id: 'sp_BBBB', active_snowplow_id: 'sp_AAAA', merged_at: '2025-12-18 10:02:00.000', model_tstamp: '2025-12-18 10:05:00.000'}
+    # uuid is omitted: surrogate key (non-deterministic hash)
+    expect:
+      rows:
+        - {active_snowplow_id: 'sp_AAAA', id_type: 'DOMAIN_USERID', id_value: 'user-aaa', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2025-12-18 10:00:00.000', last_seen_at: '2025-12-18 10:00:10.000', first_seen_event_id: 'evt-001'}
+        - {active_snowplow_id: 'sp_AAAA', id_type: 'DOMAIN_USERID', id_value: 'user-bbb', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2025-12-18 10:01:00.000', last_seen_at: '2025-12-18 10:01:10.000', first_seen_event_id: 'evt-002'}
+
+  - name: test__snowplow_identities_identifier_mapping_this_run__multiple_identifier_types
+    description: >
+      sp_AAAA has both domain_userid and user_id set. UNPIVOT should
+      produce two separate rows, one per identifier type.
+    model: snowplow_identities_identifier_mapping_this_run
+    overrides:
+      macros:
+        is_incremental: false
+    given:
+      - input: ref('snowplow_identities_new_identities_this_run')
+        rows:
+          - {snowplow_id: 'sp_AAAA', created_at: '2025-12-18 10:00:00.500', first_seen_event_id: 'evt-001', first_app_id: 'web', last_app_id: 'web', domain_userid: 'user-aaa', user_id: 'john@example.com', first_derived_tstamp: '2025-12-18 10:00:00.000', last_derived_tstamp: '2025-12-18 10:00:10.000'}
+      - input: ref('snowplow_identities_snowplow_id_mapping')
+        rows: []
+    # uuid is omitted: surrogate key (non-deterministic hash)
+    expect:
+      rows:
+        - {active_snowplow_id: 'sp_AAAA', id_type: 'DOMAIN_USERID', id_value: 'user-aaa', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2025-12-18 10:00:00.000', last_seen_at: '2025-12-18 10:00:10.000', first_seen_event_id: 'evt-001'}
+        - {active_snowplow_id: 'sp_AAAA', id_type: 'USER_ID', id_value: 'john@example.com', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2025-12-18 10:00:00.000', last_seen_at: '2025-12-18 10:00:10.000', first_seen_event_id: 'evt-001'}

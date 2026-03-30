@@ -1,0 +1,71 @@
+version: 2
+
+unit_tests:
+
+  - name: test__snowplow_identities_id_changes__first_run
+    description: >
+      Non-incremental (first run): passes through id_changes_this_run as-is.
+    model: snowplow_identities_id_changes
+    overrides:
+      macros:
+        is_incremental: false
+        snowplow_utils.is_run_with_new_events: "true"
+    given:
+      - input: ref('snowplow_identities_id_changes_this_run')
+        rows:
+          - {id_change_key: 'key-aaa', snowplow_id: 'sp_AAAA', previous_snowplow_id: null, effective_at: '2025-12-18 10:00:00.000', changed_at: '2025-12-18 10:05:00.000', change_type: 'created', first_seen_event_id: 'evt-001', first_seen_app_id: 'web'}
+          - {id_change_key: 'key-merge', snowplow_id: 'sp_AAAA', previous_snowplow_id: 'sp_BBBB', effective_at: '2025-12-18 10:02:00.000', changed_at: '2025-12-18 10:05:00.000', change_type: 'merged', first_seen_event_id: 'evt-003', first_seen_app_id: 'web'}
+    expect:
+      rows:
+        - {id_change_key: 'key-aaa', snowplow_id: 'sp_AAAA', previous_snowplow_id: null, effective_at: '2025-12-18 10:00:00.000', changed_at: '2025-12-18 10:05:00.000', change_type: 'created', first_seen_event_id: 'evt-001', first_seen_app_id: 'web'}
+        - {id_change_key: 'key-merge', snowplow_id: 'sp_AAAA', previous_snowplow_id: 'sp_BBBB', effective_at: '2025-12-18 10:02:00.000', changed_at: '2025-12-18 10:05:00.000', change_type: 'merged', first_seen_event_id: 'evt-003', first_seen_app_id: 'web'}
+
+  # FAILING — least(value, NULL) returns NULL in Snowflake, so
+  # effective_at and changed_at become NULL for new records with
+  # no matching id_change_key in the existing table.
+  - name: test__snowplow_identities_id_changes__new_record_added
+    description: >
+      Incremental: sp_AAAA already exists in the table. A new record
+      for sp_BBBB arrives with no matching id_change_key in this.
+      The new record's effective_at and changed_at should be preserved.
+    model: snowplow_identities_id_changes
+    overrides:
+      macros:
+        is_incremental: true
+        snowplow_utils.is_run_with_new_events: "true"
+    given:
+      - input: ref('snowplow_identities_id_changes_this_run')
+        rows:
+          - {id_change_key: 'key-bbb', snowplow_id: 'sp_BBBB', previous_snowplow_id: null, effective_at: '2025-12-18 10:01:00.000', changed_at: '2025-12-18 10:05:00.000', change_type: 'created', first_seen_event_id: 'evt-002', first_seen_app_id: 'web'}
+      - input: this
+        rows:
+          - {id_change_key: 'key-aaa', snowplow_id: 'sp_AAAA', previous_snowplow_id: null, effective_at: '2025-12-18 10:00:00.000', changed_at: '2025-12-18 10:05:00.000', change_type: 'created', first_seen_event_id: 'evt-001', first_seen_app_id: 'web'}
+    expect:
+      rows:
+        - {id_change_key: 'key-bbb', snowplow_id: 'sp_BBBB', previous_snowplow_id: null, effective_at: '2025-12-18 10:01:00.000', changed_at: '2025-12-18 10:05:00.000', change_type: 'created', first_seen_event_id: 'evt-002', first_seen_app_id: 'web'}
+
+  # This scenario is possible because the model reads from
+  # new_identities_this_run (the current batch) rather than the
+  # historical new_identities table. An older event for sp_AAAA can
+  # arrive in a later batch with an earlier derived_tstamp.
+  - name: test__snowplow_identities_id_changes__late_arriving_data
+    description: >
+      Incremental: the same id_change_key for sp_AAAA arrives again with
+      an earlier effective_at (09:50 vs 10:00). The earliest effective_at
+      and changed_at should be kept, and first_seen_event_id should come
+      from the earlier event.
+    model: snowplow_identities_id_changes
+    overrides:
+      macros:
+        is_incremental: true
+        snowplow_utils.is_run_with_new_events: "true"
+    given:
+      - input: ref('snowplow_identities_id_changes_this_run')
+        rows:
+          - {id_change_key: 'key-aaa', snowplow_id: 'sp_AAAA', previous_snowplow_id: null, effective_at: '2025-12-18 09:50:00.000', changed_at: '2025-12-18 11:00:00.000', change_type: 'created', first_seen_event_id: 'evt-early', first_seen_app_id: 'web'}
+      - input: this
+        rows:
+          - {id_change_key: 'key-aaa', snowplow_id: 'sp_AAAA', previous_snowplow_id: null, effective_at: '2025-12-18 10:00:00.000', changed_at: '2025-12-18 10:05:00.000', change_type: 'created', first_seen_event_id: 'evt-001', first_seen_app_id: 'web'}
+    expect:
+      rows:
+        - {id_change_key: 'key-aaa', snowplow_id: 'sp_AAAA', previous_snowplow_id: null, effective_at: '2025-12-18 09:50:00.000', changed_at: '2025-12-18 10:05:00.000', change_type: 'created', first_seen_event_id: 'evt-early', first_seen_app_id: 'web'}

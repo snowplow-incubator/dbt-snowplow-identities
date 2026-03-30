@@ -1,0 +1,40 @@
+version: 2
+
+unit_tests:
+
+  - name: test__snowplow_identities_snowplow_id_mapping__first_run
+    description: >
+      First run: sp_BBBB is merged into sp_AAAA. The table should
+      contain the mapping.
+    model: snowplow_identities_snowplow_id_mapping
+    overrides:
+      macros:
+        snowplow_utils.is_run_with_new_events: "true"
+    given:
+      - input: ref('snowplow_identities_snowplow_id_mapping_this_run')
+        rows:
+          - {snowplow_id: 'sp_BBBB', active_snowplow_id: 'sp_AAAA', merged_at: '2025-12-18 10:02:00.000', model_tstamp: '2025-12-18 10:05:00.000'}
+    expect:
+      rows:
+        - {snowplow_id: 'sp_BBBB', active_snowplow_id: 'sp_AAAA', merged_at: '2025-12-18 10:02:00.000', model_tstamp: '2025-12-18 10:05:00.000'}
+
+  - name: test__snowplow_identities_snowplow_id_mapping__remapped_to_new_parent
+    description: >
+      Incremental: sp_BBBB was previously mapped to sp_AAAA. A new
+      merge remaps sp_BBBB to sp_CCCC. The mapping should be updated
+      to the new parent.
+    model: snowplow_identities_snowplow_id_mapping
+    overrides:
+      macros:
+        is_incremental: true
+        snowplow_utils.is_run_with_new_events: "true"
+    given:
+      - input: ref('snowplow_identities_snowplow_id_mapping_this_run')
+        rows:
+          - {snowplow_id: 'sp_BBBB', active_snowplow_id: 'sp_CCCC', merged_at: '2025-12-19 14:00:00.000', model_tstamp: '2025-12-19 14:05:00.000'}
+      - input: this
+        rows:
+          - {snowplow_id: 'sp_BBBB', active_snowplow_id: 'sp_AAAA', merged_at: '2025-12-18 10:02:00.000', model_tstamp: '2025-12-18 10:05:00.000'}
+    expect:
+      rows:
+        - {snowplow_id: 'sp_BBBB', active_snowplow_id: 'sp_CCCC', merged_at: '2025-12-19 14:00:00.000', model_tstamp: '2025-12-19 14:05:00.000'}

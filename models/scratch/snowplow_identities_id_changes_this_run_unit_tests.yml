@@ -1,0 +1,36 @@
+version: 2
+
+unit_tests:
+
+  - name: test__snowplow_identities_id_changes_this_run__two_created_one_merged
+    description: >
+      sp_AAAA and sp_BBBB are created, then sp_BBBB is merged into sp_AAAA.
+      Expects 2 'created' rows and 1 'merged' row.
+    model: snowplow_identities_id_changes_this_run
+    config:
+      tags: ["snowflake_only"]
+    given:
+      - input: ref('snowplow_identities_new_identities_this_run')
+        rows:
+          - {snowplow_id: 'sp_AAAA', created_at: '2025-12-18 10:00:00.500', first_seen_event_id: 'evt-001', first_app_id: 'web', last_app_id: 'web', domain_userid: 'user-aaa', user_id: null, first_derived_tstamp: '2025-12-18 10:00:00.000', last_derived_tstamp: '2025-12-18 10:00:10.000'}
+          - {snowplow_id: 'sp_BBBB', created_at: '2025-12-18 10:01:00.500', first_seen_event_id: 'evt-002', first_app_id: 'web', last_app_id: 'web', domain_userid: 'user-bbb', user_id: null, first_derived_tstamp: '2025-12-18 10:01:00.000', last_derived_tstamp: '2025-12-18 10:01:10.000'}
+      - input: ref('snowplow_identities_merge_events_this_run')
+        format: sql
+        rows: |
+          select
+            'evt-003' as merge_event_id,
+            'sp_AAAA' as active_snowplow_id,
+            parse_json('[{"snowplowId":"sp_BBBB","createdAt":"2025-12-18T10:01:00.500Z","mergedAt":"2025-12-18T10:02:00.000Z","triggeringEventId":"evt-003"}]') as merged,
+            parse_json('["sp_BBBB"]') as merges,
+            '2025-12-18 10:02:00.100'::timestamp as collector_tstamp,
+            '2025-12-18 10:02:00.000'::timestamp as derived_tstamp
+    # id_change_key and changed_at are omitted from expected rows:
+    # - id_change_key is a surrogate key (non-deterministic hash)
+    # - changed_at uses snowplow_utils.current_timestamp_in_utc() which
+    #   cannot be overridden in dbt-fusion unit tests
+    # dbt-fusion only compares columns present in expected rows.
+    expect:
+      rows:
+        - {snowplow_id: 'sp_AAAA', previous_snowplow_id: null, effective_at: '2025-12-18 10:00:00.000', change_type: 'created', first_seen_event_id: 'evt-001', first_seen_app_id: 'web'}
+        - {snowplow_id: 'sp_BBBB', previous_snowplow_id: null, effective_at: '2025-12-18 10:01:00.000', change_type: 'created', first_seen_event_id: 'evt-002', first_seen_app_id: 'web'}
+        - {snowplow_id: 'sp_AAAA', previous_snowplow_id: 'sp_BBBB', effective_at: '2025-12-18 10:02:00.000', change_type: 'merged', first_seen_event_id: 'evt-003', first_seen_app_id: 'web'}

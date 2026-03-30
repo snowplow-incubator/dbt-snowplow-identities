@@ -7,19 +7,30 @@ You may obtain a copy of the Snowplow Personal and Academic License Version 1.0 
 
 with prep as (
     select
-        c.snowplow_id,
-        c.created_at,
-        e.event_id,
-        e.app_id,
+        -- Extract identity fields directly from the event using the macro
+        {{ snowplow_identities.get_identity_fields() }}
         {% for identifier in var('snowplow__identifiers', [{'reference': 'domain_userid', 'alias': 'domain_userid'}, {'reference': 'user_id', 'alias': 'user_id'}]) %}
-            e.{{ identifier.reference }} as {{ identifier.alias }},
+        {{ identifier.reference }} as {{ identifier.alias }},
         {% endfor %}
-        e.derived_tstamp,
-        e.collector_tstamp
-    from {{ ref('snowplow_identities_base_events_this_run') }} e,
-    UNNEST(contexts_com_snowplowanalytics_snowplow_identity_1) as c
-    where e.contexts_com_snowplowanalytics_snowplow_identity_1 is not null
-    QUALIFY row_number() over (partition by event_id order by collector_tstamp) = 1
+        event_id,
+        app_id,
+        derived_tstamp,
+        collector_tstamp
+    from {{ ref('snowplow_identities_base_events_this_run') }}
+    where 
+    {% if target.type == 'bigquery' %}
+        {{ snowplow_utils.get_optional_fields(
+            enabled=true,
+            col_prefix='contexts_com_snowplowanalytics_snowplow_identity_1',
+            fields=[{'field': ('snowplow_id', 'snowplow_id'), 'dtype': 'string'}],
+            relation=source('atomic', 'events') if 'integration_tests' in project_name and 'snowplow' in project_name else source('atomic', 'events'),
+            relation_alias=none,
+            include_field_alias=false
+        ) }} is not null
+    {% else %}
+        contexts_com_snowplowanalytics_snowplow_identity_1 is not null
+    {% endif %}
+    qualify row_number() over (partition by event_id order by collector_tstamp) = 1
 )
 
 , first_event as (
