@@ -67,11 +67,14 @@ with new_from_this_run as (
         c.active_snowplow_id,
         c.id_type,
         c.id_value,
-        c.first_app_id,
-        c.last_app_id,
+        case when h.first_seen_at is not null and h.first_seen_at <= c.first_seen_at
+             then h.first_app_id else c.first_app_id end as first_app_id,
+        case when h.last_seen_at is not null and h.last_seen_at >= c.last_seen_at
+             then h.last_app_id else c.last_app_id end as last_app_id,
         least(c.first_seen_at, coalesce(h.first_seen_at, c.first_seen_at)) as first_seen_at,
         greatest(c.last_seen_at, coalesce(h.last_seen_at, c.last_seen_at)) as last_seen_at,
-        coalesce(h.first_seen_event_id, c.first_seen_event_id) as first_seen_event_id
+        case when h.first_seen_at is not null and h.first_seen_at <= c.first_seen_at
+             then h.first_seen_event_id else c.first_seen_event_id end as first_seen_event_id
     from new_from_this_run c
     left join {{ this }} h
         on c.uuid = h.uuid

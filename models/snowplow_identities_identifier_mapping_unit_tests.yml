@@ -85,3 +85,65 @@ unit_tests:
     expect:
       rows:
         - {uuid: 'uuid-aaa', active_snowplow_id: 'sp_AAAA', id_type: 'DOMAIN_USERID', id_value: 'user-aaa', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2025-12-15 10:00:00.000', last_seen_at: '2025-12-19 14:00:00.000', first_seen_event_id: 'evt-mon'}
+
+  - name: test__snowplow_identities_identifier_mapping__preserve_first_app_id
+    description: >
+      Bug: first_app_id is overwritten by the current batch instead of
+      being preserved from the historical record. In batch 1, identifier
+      user-aaa is first seen from app 'web'. In batch 2, the same
+      identifier appears from app 'mobile'. The model should preserve
+      first_app_id='web' from batch 1, but new_with_history uses
+      c.first_app_id directly (='mobile') without checking which batch
+      is earlier.
+    model: snowplow_identities_identifier_mapping
+    config:
+      tags: ["snowflake_only"]
+    overrides:
+      macros:
+        is_incremental: true
+        snowplow_utils.is_run_with_new_events: "true"
+    given:
+      - input: ref('snowplow_identities_identifier_mapping_this_run')
+        rows:
+          - {uuid: 'uuid-aaa', active_snowplow_id: 'sp_AAAA', id_type: 'DOMAIN_USERID', id_value: 'user-aaa', first_app_id: 'mobile', last_app_id: 'mobile', first_seen_at: '2025-12-19 14:00:00.000', last_seen_at: '2025-12-19 14:00:00.000', first_seen_event_id: 'evt-wed'}
+      - input: ref('snowplow_identities_snowplow_id_mapping_this_run')
+        rows: []
+      - input: ref('snowplow_identities_snowplow_id_mapping')
+        rows: []
+      - input: this
+        rows:
+          - {uuid: 'uuid-aaa', active_snowplow_id: 'sp_AAAA', id_type: 'DOMAIN_USERID', id_value: 'user-aaa', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2025-12-15 10:00:00.000', last_seen_at: '2025-12-15 10:00:00.000', first_seen_event_id: 'evt-mon'}
+    expect:
+      rows:
+        - {uuid: 'uuid-aaa', active_snowplow_id: 'sp_AAAA', id_type: 'DOMAIN_USERID', id_value: 'user-aaa', first_app_id: 'web', last_app_id: 'mobile', first_seen_at: '2025-12-15 10:00:00.000', last_seen_at: '2025-12-19 14:00:00.000', first_seen_event_id: 'evt-mon'}
+
+  - name: test__snowplow_identities_identifier_mapping__late_arriving_earlier_event
+    description: >
+      Bug: first_seen_event_id is not updated when a late-arriving event
+      has an earlier timestamp. In batch 1, identifier user-aaa is first
+      seen at 10:00 (evt-001). In batch 2, a late-arriving event (evt-early)
+      with derived_tstamp 09:50 arrives. The first_seen_event_id should
+      update to evt-early (chronologically earlier), but
+      coalesce(h.first_seen_event_id, c.first_seen_event_id) always
+      keeps the historical value when it exists.
+    model: snowplow_identities_identifier_mapping
+    config:
+      tags: ["snowflake_only"]
+    overrides:
+      macros:
+        is_incremental: true
+        snowplow_utils.is_run_with_new_events: "true"
+    given:
+      - input: ref('snowplow_identities_identifier_mapping_this_run')
+        rows:
+          - {uuid: 'uuid-aaa', active_snowplow_id: 'sp_AAAA', id_type: 'DOMAIN_USERID', id_value: 'user-aaa', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2025-12-18 09:50:00.000', last_seen_at: '2025-12-18 09:50:00.000', first_seen_event_id: 'evt-early'}
+      - input: ref('snowplow_identities_snowplow_id_mapping_this_run')
+        rows: []
+      - input: ref('snowplow_identities_snowplow_id_mapping')
+        rows: []
+      - input: this
+        rows:
+          - {uuid: 'uuid-aaa', active_snowplow_id: 'sp_AAAA', id_type: 'DOMAIN_USERID', id_value: 'user-aaa', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2025-12-18 10:00:00.000', last_seen_at: '2025-12-18 10:00:00.000', first_seen_event_id: 'evt-001'}
+    expect:
+      rows:
+        - {uuid: 'uuid-aaa', active_snowplow_id: 'sp_AAAA', id_type: 'DOMAIN_USERID', id_value: 'user-aaa', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2025-12-18 09:50:00.000', last_seen_at: '2025-12-18 10:00:00.000', first_seen_event_id: 'evt-early'}
