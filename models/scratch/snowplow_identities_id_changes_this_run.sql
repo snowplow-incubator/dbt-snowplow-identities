@@ -30,10 +30,12 @@ id_changes as (
             m.merged_at as effective_at,
             'merged' as change_type,
             m.triggering_event_id as first_seen_event_id,
-            n.first_app_id as first_seen_app_id
+            coalesce(h.first_app_id, n.first_app_id) as first_seen_app_id
         from unnesting m
         left join {{ ref('snowplow_identities_new_identities_this_run') }} n
           on m.snowplow_id = n.snowplow_id
+        left join {{ ref('snowplow_identities_new_identities') }} h
+          on m.snowplow_id = h.snowplow_id
 )
 
 select

@@ -37,8 +37,8 @@ select
     i.snowplow_id,
     i.previous_snowplow_id,
     -- Always keep the earliest effective_at and changed at for any late arriving data
-    least(i.effective_at, t.effective_at) as effective_at,
-    least(i.changed_at, t.changed_at) as changed_at,
+    least(i.effective_at, coalesce(t.effective_at, i.effective_at)) as effective_at,
+    least(i.changed_at, coalesce(t.changed_at, i.changed_at)) as changed_at,
     i.change_type,
     case when t.effective_at is null or i.effective_at < t.effective_at then i.first_seen_event_id
       else t.first_seen_event_id end as first_seen_event_id,

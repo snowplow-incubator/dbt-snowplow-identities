@@ -14,6 +14,8 @@ unit_tests:
         rows:
           - {snowplow_id: 'sp_AAAA', created_at: '2025-12-18 10:00:00.500', first_seen_event_id: 'evt-001', first_app_id: 'web', last_app_id: 'web', domain_userid: 'user-aaa', user_id: null, first_derived_tstamp: '2025-12-18 10:00:00.000', last_derived_tstamp: '2025-12-18 10:00:10.000'}
           - {snowplow_id: 'sp_BBBB', created_at: '2025-12-18 10:01:00.500', first_seen_event_id: 'evt-002', first_app_id: 'web', last_app_id: 'web', domain_userid: 'user-bbb', user_id: null, first_derived_tstamp: '2025-12-18 10:01:00.000', last_derived_tstamp: '2025-12-18 10:01:10.000'}
+      - input: ref('snowplow_identities_new_identities')
+        rows: []
       - input: ref('snowplow_identities_merge_events_this_run')
         format: sql
         rows: |
@@ -34,3 +36,51 @@ unit_tests:
         - {snowplow_id: 'sp_AAAA', previous_snowplow_id: null, effective_at: '2025-12-18 10:00:00.000', change_type: 'created', first_seen_event_id: 'evt-001', first_seen_app_id: 'web'}
         - {snowplow_id: 'sp_BBBB', previous_snowplow_id: null, effective_at: '2025-12-18 10:01:00.000', change_type: 'created', first_seen_event_id: 'evt-002', first_seen_app_id: 'web'}
         - {snowplow_id: 'sp_AAAA', previous_snowplow_id: 'sp_BBBB', effective_at: '2025-12-18 10:02:00.000', change_type: 'merged', first_seen_event_id: 'evt-003', first_seen_app_id: 'web'}
+
+  # Regression test for: first_seen_app_id NULL for merge rows from prior runs.
+  #
+  # Bug scenario: the merge branch in id_changes_this_run joins against
+  # new_identities_this_run to resolve first_app_id. That scratch table
+  # only contains identities seen in the *current* batch. When a merge
+  # event absorbs an identity that was created in a *previous* run,
+  # the LEFT JOIN finds no match and first_seen_app_id becomes NULL.
+  #
+  # Fix: add a fallback LEFT JOIN against the persisted new_identities
+  # table with COALESCE, so identities from prior runs still resolve.
+  #
+  # This test provides sp_AAAA only in new_identities (prior run) and
+  # NOT in new_identities_this_run (current batch). The merge absorbs
+  # sp_AAAA into sp_BBBB. Without the fix, first_seen_app_id is NULL.
+  # With the fix, it correctly resolves to 'web' from the historical table.
+  - name: test__snowplow_identities_id_changes_this_run__merge_from_prior_run
+    description: >
+      Regression: a merge event absorbs sp_AAAA (created days ago, not in
+      the current batch) into sp_BBBB (created this batch). Because sp_AAAA
+      only exists in the persisted new_identities table and not in
+      new_identities_this_run, the model must fall back to the historical
+      table to resolve first_seen_app_id. Verifies the COALESCE fallback
+      produces 'web' (from the prior-run identity) instead of NULL.
+    model: snowplow_identities_id_changes_this_run
+    config:
+      tags: ["snowflake_only"]
+    given:
+      - input: ref('snowplow_identities_new_identities_this_run')
+        rows:
+          - {snowplow_id: 'sp_BBBB', created_at: '2025-12-18 10:01:00.500', first_seen_event_id: 'evt-002', first_app_id: 'mobile', last_app_id: 'mobile', domain_userid: 'user-bbb', user_id: null, first_derived_tstamp: '2025-12-18 10:01:00.000', last_derived_tstamp: '2025-12-18 10:01:10.000'}
+      - input: ref('snowplow_identities_new_identities')
+        rows:
+          - {snowplow_id: 'sp_AAAA', created_at: '2025-12-15 08:00:00.500', first_seen_event_id: 'evt-old', first_app_id: 'web', last_app_id: 'web', domain_userid: 'user-aaa', user_id: null, first_derived_tstamp: '2025-12-15 08:00:00.000', last_derived_tstamp: '2025-12-15 08:00:10.000'}
+      - input: ref('snowplow_identities_merge_events_this_run')
+        format: sql
+        rows: |
+          select
+            'evt-003' as merge_event_id,
+            'sp_BBBB' as active_snowplow_id,
+            parse_json('[{"snowplowId":"sp_AAAA","createdAt":"2025-12-15T08:00:00.500Z","mergedAt":"2025-12-18T10:02:00.000Z","triggeringEventId":"evt-003"}]') as merged,
+            parse_json('["sp_AAAA"]') as merges,
+            '2025-12-18 10:02:00.100'::timestamp as collector_tstamp,
+            '2025-12-18 10:02:00.000'::timestamp as derived_tstamp
+    expect:
+      rows:
+        - {snowplow_id: 'sp_BBBB', previous_snowplow_id: null, effective_at: '2025-12-18 10:01:00.000', change_type: 'created', first_seen_event_id: 'evt-002', first_seen_app_id: 'mobile'}
+        - {snowplow_id: 'sp_BBBB', previous_snowplow_id: 'sp_AAAA', effective_at: '2025-12-18 10:02:00.000', change_type: 'merged', first_seen_event_id: 'evt-003', first_seen_app_id: 'web'}
