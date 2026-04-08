@@ -38,10 +38,11 @@ vars:
     snowplow__allow_null_dvce_tstamps: true
     snowplow__atomic_schema: "{{ target.schema ~ '_snplw_identities_int_tests' }}"
     snowplow__events_table: snowplow_identities_events_stg
-    snowplow__start_date: '2026-01-01'
+    snowplow__start_date: '2020-01-02'
     snowplow__backfill_limit_days: 1
     snowplow__databricks_catalog: hive_metastore
     snowplow__license_accepted: true
+    snowplow__identifiers: [{'reference': 'domain_userid', 'alias': 'domain_userid'}, {'reference': 'user_id', 'alias': 'user_id'}, {'reference': 'network_userid', 'alias': 'network_userid'}]
     snowplow__app_id: []
 seeds:
   snowplow_identities_integration_tests:
@@ -50,8 +51,10 @@ seeds:
       snowplow_identities_events:
         +column_types:
           app_id: "{{ 'string' if target.type in ['bigquery', 'databricks', 'spark'] else 'varchar' }}"
+          name_tracker: "{{ 'string' if target.type in ['bigquery', 'databricks', 'spark'] else 'varchar' }}"
           domain_userid: "{{ 'string' if target.type in ['bigquery', 'databricks', 'spark'] else 'varchar' }}"
           user_id: "{{ 'string' if target.type in ['bigquery', 'databricks', 'spark'] else 'varchar' }}"
+          network_userid: "{{ 'string' if target.type in ['bigquery', 'databricks', 'spark'] else 'varchar' }}"
           collector_tstamp: timestamp
           derived_tstamp: timestamp
           dvce_created_tstamp: timestamp
