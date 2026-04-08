@@ -28,7 +28,7 @@ WITH ids_affected_this_run AS (
     SELECT DISTINCT snowplow_id
     FROM {{ ref('snowplow_identities_id_changes_this_run') }}
 
-    UNION
+    UNION ALL
 
     SELECT DISTINCT previous_snowplow_id
     FROM {{ ref('snowplow_identities_id_changes_this_run') }}
@@ -68,7 +68,10 @@ WITH ids_affected_this_run AS (
     {% endif %}
 )
 
--- deduplicate exact duplicate rows (same snowplow_id, active_snowplow_id, effective_at) that can arise from late-arriving data being reprocessed
+-- deduplicate by (snowplow_id, active_snowplow_id, change_type), keeping the earliest record.
+-- Partitioning by change_type instead of effective_at handles the case where an existing identity
+-- reappears in a later batch (e.g. referenced in a merge event), causing id_changes_this_run to
+-- re-emit a "created" row with a different effective_at than the original.
 , deduped AS (
     SELECT
         id_change_key,
@@ -78,8 +81,8 @@ WITH ids_affected_this_run AS (
         change_type
     FROM combined
     QUALIFY ROW_NUMBER() OVER (
-        PARTITION BY snowplow_id, active_snowplow_id, effective_at
-        ORDER BY id_change_key
+        PARTITION BY snowplow_id, active_snowplow_id, change_type
+        ORDER BY effective_at ASC
     ) = 1
 )
 , final_scd AS (
