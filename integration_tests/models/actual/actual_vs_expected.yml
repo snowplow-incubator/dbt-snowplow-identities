@@ -1,10 +1,44 @@
 version: 2
 
-# Example tests for equality:
-# models:
-#   - name: snowplow_unified_base_quarantined_sessions_actual
-#     tests:
-#       - dbt_utils.equal_rowcount:
-#           compare_model: ref('snowplow_unified_base_quarantined_sessions_expected_stg')
-#       - dbt_utils.equality:
-#           compare_model: ref('snowplow_unified_base_quarantined_sessions_expected_stg')
+models:
+  - name: snowplow_identities_snowplow_id_mapping_actual
+    tests:
+      - dbt_utils.equality:
+          compare_model: ref('snowplow_identities_snowplow_id_mapping_expected_stg')
+      - dbt_utils.equal_rowcount:
+          compare_model: ref('snowplow_identities_snowplow_id_mapping_expected_stg')
+
+  - name: snowplow_identities_merge_events_actual
+    tests:
+      - dbt_utils.equality:
+          compare_model: ref('snowplow_identities_merge_events_expected_stg')
+      - dbt_utils.equal_rowcount:
+          compare_model: ref('snowplow_identities_merge_events_expected_stg')
+
+  - name: snowplow_identities_new_identities_actual
+    tests:
+      - dbt_utils.equality:
+          compare_model: ref('snowplow_identities_new_identities_expected_stg')
+      - dbt_utils.equal_rowcount:
+          compare_model: ref('snowplow_identities_new_identities_expected_stg')
+
+  - name: snowplow_identities_id_changes_actual
+    tests:
+      - dbt_utils.equality:
+          compare_model: ref('snowplow_identities_id_changes_expected_stg')
+      - dbt_utils.equal_rowcount:
+          compare_model: ref('snowplow_identities_id_changes_expected_stg')
+
+  - name: snowplow_identities_identifier_mapping_actual
+    tests:
+      - dbt_utils.equality:
+          compare_model: ref('snowplow_identities_identifier_mapping_expected_stg')
+      - dbt_utils.equal_rowcount:
+          compare_model: ref('snowplow_identities_identifier_mapping_expected_stg')
+
+  - name: snowplow_identities_id_mapping_scd_actual
+    tests:
+      - dbt_utils.equality:
+          compare_model: ref('snowplow_identities_id_mapping_scd_expected_stg')
+      - dbt_utils.equal_rowcount:
+          compare_model: ref('snowplow_identities_id_mapping_scd_expected_stg')

@@ -10,7 +10,7 @@ do
   esac
 done
 
-declare -a SUPPORTED_DATABASES=("bigquery" "postgres" "databricks" "redshift" "snowflake")
+declare -a SUPPORTED_DATABASES=("bigquery" "snowflake")
 
 # set to lower case
 DATABASE="$(echo $DATABASE | tr '[:upper:]' '[:lower:]')"
@@ -23,25 +23,25 @@ fi
 
 for db in ${DATABASES[@]}; do
 
-  echo "snowplow-identitiesintegration tests: Seeding data"
+  echo "snowplow-identities integration tests: Seeding data"
   eval "dbt seed --full-refresh --target $db" || exit 1;
 
-  echo "snowplow-identitiesintegration tests: Try run without data"
-  eval "dbt run --full-refresh --vars '{snowplow__allow_refresh: true, snowplow__backfill_limit_days: 1, snowplow__start_date: 2010-01-01}' --target $db" || exit 1;
-
-  echo "snowplow-identitiesintegration tests: Execute models - run 1/4"
-  eval "dbt run --full-refresh --vars '{snowplow__allow_refresh: true, snowplow__backfill_limit_days: 243}' --target $db" || exit 1;
+  echo "snowplow-identities integration tests: Execute models - run 1/4 (full refresh)"
+  eval "dbt run --full-refresh --vars '{snowplow__allow_refresh: true, snowplow__backfill_limit_days: 1}' --target $db" || exit 1;
 
   for i in {2..4}
   do
-    echo "snowplow-identitiesintegration tests: Execute models - run $i/4"
+    echo "snowplow-identities integration tests: Execute models - run $i/4"
     eval "dbt run --target $db" || exit 1;
   done
 
-  echo "snowplow-identitiesintegration tests: Test models"
+  echo "snowplow-identities integration tests: Test models"
+  if [[ $db == "bigquery" ]]; then
+    eval "dbt test --exclude tag:snowflake_only --target $db" || exit 1;
+  else
+    eval "dbt test --target $db" || exit 1;
+  fi
 
-  eval "dbt test test_name:not_null --store-failures --target $db" || exit 1;
-
-  echo "snowplow-identitiesintegration tests: All tests passed"
+  echo "snowplow-identities integration tests: All tests passed"
 
 done
