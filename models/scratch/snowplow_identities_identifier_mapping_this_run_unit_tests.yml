@@ -103,3 +103,38 @@ unit_tests:
       rows:
         - {active_snowplow_id: 'sp_AAAA', id_type: 'DOMAIN_USERID', id_value: 'user-aaa', first_app_id: 'web', last_app_id: 'mobile', first_seen_at: '2025-12-18 10:00:00.000', last_seen_at: '2025-12-18 10:01:00.000', first_seen_event_id: 'evt-001'}
         - {active_snowplow_id: 'sp_AAAA', id_type: 'USER_ID', id_value: 'john123', first_app_id: 'mobile', last_app_id: 'mobile', first_seen_at: '2025-12-18 10:01:00.000', last_seen_at: '2025-12-18 10:01:00.000', first_seen_event_id: 'evt-002'}
+
+  - name: test__snowplow_identities_identifier_mapping_this_run__same_identifier_across_merged_ids
+    description: >
+      Two snowplow_ids carry the same identifier value (duid_XBT_C). One is
+      seen first at 00:00:01 (sp_GTRZ), the other at 00:00:02 (sp_KKHE).
+      After merging, both map to the same active_snowplow_id, collapsing
+      into a single group. first_seen_event_id and first_app_id must come
+      from the row with the earliest timestamp, not an arbitrary row.
+    model: snowplow_identities_identifier_mapping_this_run
+    config:
+      tags: ["snowflake_only"]
+    overrides:
+      macros:
+        is_incremental: false
+    given:
+      - input: ref('snowplow_identities_new_identifiers_this_run')
+        format: sql
+        rows: |
+          select
+            'sp_GTRZ3727UNLKNHQX4FTX7VWV2I' as snowplow_id, 'DOMAIN_USERID' as id_type, 'duid_XBT_C' as id_value,
+            '958a7b03-ed83-4381-9245-21ccf58c2b6f' as first_seen_event_id, 'web' as first_app_id, 'web' as last_app_id,
+            '2020-01-04 00:00:01.000'::timestamp as first_derived_tstamp,
+            '2020-01-04 00:00:01.000'::timestamp as last_derived_tstamp
+          union all
+          select
+            'sp_KKHEIXJLSFKH5F5APFXTGWIWBU', 'DOMAIN_USERID', 'duid_XBT_C',
+            '163fac78-90fc-40b2-9176-edba817e1e24', 'web', 'web',
+            '2020-01-04 00:00:02.000'::timestamp,
+            '2020-01-04 00:00:02.000'::timestamp
+      - input: ref('snowplow_identities_snowplow_id_mapping')
+        rows:
+          - {snowplow_id: 'sp_GTRZ3727UNLKNHQX4FTX7VWV2I', active_snowplow_id: 'sp_KKHEIXJLSFKH5F5APFXTGWIWBU', merged_at: '2020-01-04 00:00:02.000', model_tstamp: '2020-01-04 00:00:02.000'}
+    expect:
+      rows:
+        - {active_snowplow_id: 'sp_KKHEIXJLSFKH5F5APFXTGWIWBU', id_type: 'DOMAIN_USERID', id_value: 'duid_XBT_C', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2020-01-04 00:00:01.000', last_seen_at: '2020-01-04 00:00:02.000', first_seen_event_id: '958a7b03-ed83-4381-9245-21ccf58c2b6f'}
