@@ -64,7 +64,7 @@ with prep as (
     select
         snowplow_id,
         {% for identifier in var('snowplow__identifiers', [{'reference': 'domain_userid', 'alias': 'domain_userid'}, {'reference': 'user_id', 'alias': 'user_id'}]) %}
-            max(case when id_type = '{{ identifier.alias }}' then id_value end) as {{ identifier.alias }}{% if not loop.last %},{% endif %}
+            max(case when lower(id_type) = '{{ identifier.alias }}' then id_value end) as {{ identifier.alias }}{% if not loop.last %},{% endif %}
         {% endfor %}
     from earliest_per_type
     group by snowplow_id
