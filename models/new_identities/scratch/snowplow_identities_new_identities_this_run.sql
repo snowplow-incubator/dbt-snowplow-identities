@@ -9,9 +9,6 @@ with prep as (
     select
         -- Extract identity fields directly from the event using the macro
         {{ snowplow_identities.get_identity_fields() }}
-        {% for identifier in var('snowplow__identifiers', [{'reference': 'domain_userid', 'alias': 'domain_userid'}, {'reference': 'user_id', 'alias': 'user_id'}]) %}
-        {{ identifier.reference }} as {{ identifier.alias }},
-        {% endfor %}
         event_id,
         app_id,
         derived_tstamp,
@@ -51,16 +48,25 @@ with prep as (
     ) = 1
 )
 
+, earliest_per_type as (
+    select
+        snowplow_id,
+        id_type,
+        id_value
+    from {{ ref('snowplow_identities_new_identifiers_this_run') }}
+    qualify row_number() over (
+        partition by snowplow_id, id_type
+        order by first_derived_tstamp asc, first_seen_event_id asc
+    ) = 1
+)
+
 , aggregated_values as (
-    -- Aggregate all identifier values across all events for each snowplow_id
-    -- This ensures we capture identifiers even if they don't appear in the first event
     select
         snowplow_id,
         {% for identifier in var('snowplow__identifiers', [{'reference': 'domain_userid', 'alias': 'domain_userid'}, {'reference': 'user_id', 'alias': 'user_id'}]) %}
-            max({{ identifier.alias }}) as {{ identifier.alias }}{% if not loop.last %},{% endif %}
+            max(case when id_type = '{{ identifier.alias }}' then id_value end) as {{ identifier.alias }}{% if not loop.last %},{% endif %}
         {% endfor %}
-        -- Add more identifiers here: MAX(email) as email, MAX(phone) as phone, etc.
-    from prep
+    from earliest_per_type
     group by snowplow_id
 )
 
