@@ -37,7 +37,7 @@ unit_tests:
         rows: |
           select
             'sp_AAAA' as snowplow_id,
-            'domain_userid' as id_type,
+            'DOMAIN_USERID' as id_type,
             'user-aaa' as id_value,
             'evt-001' as first_seen_event_id,
             'web' as first_app_id,
@@ -47,7 +47,7 @@ unit_tests:
           union all
           select
             'sp_BBBB',
-            'domain_userid',
+            'DOMAIN_USERID',
             'user-bbb',
             'evt-002',
             'web',
@@ -106,7 +106,7 @@ unit_tests:
         rows: |
           select
             'sp_AAAA' as snowplow_id,
-            'domain_userid' as id_type,
+            'DOMAIN_USERID' as id_type,
             'user-aaa' as id_value,
             'evt-010' as first_seen_event_id,
             'web' as first_app_id,
@@ -116,7 +116,7 @@ unit_tests:
           union all
           select
             'sp_AAAA',
-            'user_id',
+            'USER_ID',
             'login-123',
             'evt-011',
             'web',
@@ -164,7 +164,7 @@ unit_tests:
         rows: |
           select
             'sp_AAAA' as snowplow_id,
-            'domain_userid' as id_type,
+            'DOMAIN_USERID' as id_type,
             'user-aaa' as id_value,
             'evt-001' as first_seen_event_id,
             'web' as first_app_id,
@@ -174,7 +174,7 @@ unit_tests:
           union all
           select
             'sp_AAAA',
-            'domain_userid',
+            'DOMAIN_USERID',
             'user-zzz',
             'evt-002',
             'web',
