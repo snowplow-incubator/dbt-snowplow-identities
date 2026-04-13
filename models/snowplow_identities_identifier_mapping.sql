@@ -80,19 +80,34 @@ with new_from_this_run as (
         on c.uuid = h.uuid
 )
 
+, new_ranked as (
+    select
+        uuid,
+        active_snowplow_id,
+        id_type,
+        id_value,
+        first_value(first_app_id) over (partition by uuid, active_snowplow_id, id_type, id_value order by first_seen_at asc) as first_app_id,
+        first_value(last_app_id) over (partition by uuid, active_snowplow_id, id_type, id_value order by last_seen_at desc) as last_app_id,
+        min(first_seen_at) over (partition by uuid, active_snowplow_id, id_type, id_value) as first_seen_at,
+        max(last_seen_at) over (partition by uuid, active_snowplow_id, id_type, id_value) as last_seen_at,
+        first_value(first_seen_event_id) over (partition by uuid, active_snowplow_id, id_type, id_value order by first_seen_at asc) as first_seen_event_id,
+        row_number() over (partition by uuid, active_snowplow_id, id_type, id_value order by first_seen_at asc) as rn
+    from new_with_history
+)
+
 , new_aggregated as (
     select
         uuid,
         active_snowplow_id,
         id_type,
         id_value,
-        any_value(first_app_id) as first_app_id,
-        any_value(last_app_id) as last_app_id,
-        min(first_seen_at) as first_seen_at,
-        max(last_seen_at) as last_seen_at,
-        any_value(first_seen_event_id) as first_seen_event_id
-    from new_with_history
-    group by uuid, active_snowplow_id, id_type, id_value
+        first_app_id,
+        last_app_id,
+        first_seen_at,
+        last_seen_at,
+        first_seen_event_id
+    from new_ranked
+    where rn = 1
 )
 
 select * from new_aggregated
