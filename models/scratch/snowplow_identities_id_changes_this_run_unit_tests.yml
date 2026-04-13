@@ -26,6 +26,9 @@ unit_tests:
             parse_json('["sp_BBBB"]') as merges,
             '2025-12-18 10:02:00.100'::timestamp as collector_tstamp,
             '2025-12-18 10:02:00.000'::timestamp as derived_tstamp
+      - input: ref('snowplow_identities_snowplow_id_mapping_this_run')
+        rows:
+          - {snowplow_id: 'sp_BBBB', active_snowplow_id: 'sp_AAAA', merged_at: '2025-12-18 10:02:00.000', model_tstamp: '2025-12-18 10:05:00.000'}
     # id_change_key and changed_at are omitted from expected rows:
     # - id_change_key is a surrogate key (non-deterministic hash)
     # - changed_at uses snowplow_utils.current_timestamp_in_utc() which
@@ -80,6 +83,9 @@ unit_tests:
             parse_json('["sp_AAAA"]') as merges,
             '2025-12-18 10:02:00.100'::timestamp as collector_tstamp,
             '2025-12-18 10:02:00.000'::timestamp as derived_tstamp
+      - input: ref('snowplow_identities_snowplow_id_mapping_this_run')
+        rows:
+          - {snowplow_id: 'sp_AAAA', active_snowplow_id: 'sp_BBBB', merged_at: '2025-12-18 10:02:00.000', model_tstamp: '2025-12-18 10:10:00.000'}
     expect:
       rows:
         - {snowplow_id: 'sp_BBBB', previous_snowplow_id: null, effective_at: '2025-12-18 10:01:00.000', change_type: 'created', first_seen_event_id: 'evt-002', first_seen_app_id: 'mobile'}
