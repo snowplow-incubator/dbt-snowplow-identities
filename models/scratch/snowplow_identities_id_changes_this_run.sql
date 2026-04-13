@@ -23,19 +23,23 @@ id_changes as (
 
     union all
 
-    -- Merge events
+    -- Merge events (joined to resolved mapping to discard intermediate parents
+    -- from cumulative merge events, keeping only the final resolved parent)
         select
-            m.active_snowplow_id as snowplow_id,
+            sm.active_snowplow_id as snowplow_id,
             m.snowplow_id as previous_snowplow_id,
             m.merged_at as effective_at,
             'merged' as change_type,
-            m.triggering_event_id as first_seen_event_id,
+            min(m.triggering_event_id) as first_seen_event_id,
             coalesce(h.first_app_id, n.first_app_id) as first_seen_app_id
         from unnesting m
+        inner join {{ ref('snowplow_identities_snowplow_id_mapping_this_run') }} sm
+          on m.snowplow_id = sm.snowplow_id
         left join {{ ref('snowplow_identities_new_identities_this_run') }} n
           on m.snowplow_id = n.snowplow_id
         left join {{ ref('snowplow_identities_new_identities') }} h
           on m.snowplow_id = h.snowplow_id
+        group by 1, 2, 3, 4, 6
 )
 
 select
