@@ -70,6 +70,10 @@ models:
   - name: snowplow_identities_id_mapping_scd
     description: '{{ doc("table_id_mapping_scd") }}'
     columns:
+      - name: scd_key
+        description: 'Surrogate key for the SCD record, based on (snowplow_id, effective_at, change_type) for merges or (snowplow_id, change_type) for creates. Used as the incremental merge key.'
+        tests:
+          - not_null
       - name: snowplow_id
         description: 'The Snowplow ID being mapped. For merges, this is the child ID that was merged into a parent. For creates, this is the newly created ID.'
         tests:
