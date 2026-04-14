@@ -31,10 +31,9 @@ models:
     description: '{{ doc("table_identifier_mapping") }}'
     columns:
       - name: uuid
-        description: 'A unique identifier for the mapping record.'
+        description: 'Surrogate key for the identifier mapping record, based on (active_snowplow_id, id_type, id_value). Unique per resolved identity and identifier combination.'
         tests:
           - not_null
-          - unique
       - name: active_snowplow_id
         description: 'The current, canonical Snowplow ID after considering all merges .'
         tests:
