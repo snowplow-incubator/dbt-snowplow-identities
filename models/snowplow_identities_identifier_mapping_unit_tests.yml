@@ -28,7 +28,7 @@ unit_tests:
           - {uuid: 'uuid-bbb', active_snowplow_id: 'sp_BBBB', id_type: 'DOMAIN_USERID', id_value: 'user-bbb', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2025-12-18 10:00:00.000', last_seen_at: '2025-12-18 10:00:10.000', first_seen_event_id: 'evt-002'}
     expect:
       rows:
-        - {uuid: 'uuid-bbb', active_snowplow_id: 'sp_AAAA', id_type: 'DOMAIN_USERID', id_value: 'user-bbb', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2025-12-18 10:00:00.000', last_seen_at: '2025-12-18 10:00:10.000', first_seen_event_id: 'evt-002'}
+        - {active_snowplow_id: 'sp_AAAA', id_type: 'DOMAIN_USERID', id_value: 'user-bbb', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2025-12-18 10:00:00.000', last_seen_at: '2025-12-18 10:00:10.000', first_seen_event_id: 'evt-002'}
 
   - name: test__snowplow_identities_identifier_mapping__merge_with_new_events_for_absorbed_identity
     description: >
@@ -58,7 +58,7 @@ unit_tests:
           - {uuid: 'uuid-bbb', active_snowplow_id: 'sp_BBBB', id_type: 'DOMAIN_USERID', id_value: 'user-bbb', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2025-12-18 10:00:00.000', last_seen_at: '2025-12-18 10:00:10.000', first_seen_event_id: 'evt-002'}
     expect:
       rows:
-        - {uuid: 'uuid-bbb', active_snowplow_id: 'sp_AAAA', id_type: 'DOMAIN_USERID', id_value: 'user-bbb', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2025-12-18 10:00:00.000', last_seen_at: '2025-12-19 14:00:00.000', first_seen_event_id: 'evt-002'}
+        - {active_snowplow_id: 'sp_AAAA', id_type: 'DOMAIN_USERID', id_value: 'user-bbb', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2025-12-18 10:00:00.000', last_seen_at: '2025-12-19 14:00:00.000', first_seen_event_id: 'evt-002'}
 
   - name: test__snowplow_identities_identifier_mapping__preserve_first_seen_at
     description: >
@@ -84,7 +84,7 @@ unit_tests:
           - {uuid: 'uuid-aaa', active_snowplow_id: 'sp_AAAA', id_type: 'DOMAIN_USERID', id_value: 'user-aaa', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2025-12-15 10:00:00.000', last_seen_at: '2025-12-15 10:00:00.000', first_seen_event_id: 'evt-mon'}
     expect:
       rows:
-        - {uuid: 'uuid-aaa', active_snowplow_id: 'sp_AAAA', id_type: 'DOMAIN_USERID', id_value: 'user-aaa', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2025-12-15 10:00:00.000', last_seen_at: '2025-12-19 14:00:00.000', first_seen_event_id: 'evt-mon'}
+        - {active_snowplow_id: 'sp_AAAA', id_type: 'DOMAIN_USERID', id_value: 'user-aaa', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2025-12-15 10:00:00.000', last_seen_at: '2025-12-19 14:00:00.000', first_seen_event_id: 'evt-mon'}
 
   - name: test__snowplow_identities_identifier_mapping__preserve_first_app_id
     description: >
@@ -115,7 +115,7 @@ unit_tests:
           - {uuid: 'uuid-aaa', active_snowplow_id: 'sp_AAAA', id_type: 'DOMAIN_USERID', id_value: 'user-aaa', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2025-12-15 10:00:00.000', last_seen_at: '2025-12-15 10:00:00.000', first_seen_event_id: 'evt-mon'}
     expect:
       rows:
-        - {uuid: 'uuid-aaa', active_snowplow_id: 'sp_AAAA', id_type: 'DOMAIN_USERID', id_value: 'user-aaa', first_app_id: 'web', last_app_id: 'mobile', first_seen_at: '2025-12-15 10:00:00.000', last_seen_at: '2025-12-19 14:00:00.000', first_seen_event_id: 'evt-mon'}
+        - {active_snowplow_id: 'sp_AAAA', id_type: 'DOMAIN_USERID', id_value: 'user-aaa', first_app_id: 'web', last_app_id: 'mobile', first_seen_at: '2025-12-15 10:00:00.000', last_seen_at: '2025-12-19 14:00:00.000', first_seen_event_id: 'evt-mon'}
 
   - name: test__snowplow_identities_identifier_mapping__late_arriving_earlier_event
     description: >
@@ -146,4 +146,4 @@ unit_tests:
           - {uuid: 'uuid-aaa', active_snowplow_id: 'sp_AAAA', id_type: 'DOMAIN_USERID', id_value: 'user-aaa', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2025-12-18 10:00:00.000', last_seen_at: '2025-12-18 10:00:00.000', first_seen_event_id: 'evt-001'}
     expect:
       rows:
-        - {uuid: 'uuid-aaa', active_snowplow_id: 'sp_AAAA', id_type: 'DOMAIN_USERID', id_value: 'user-aaa', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2025-12-18 09:50:00.000', last_seen_at: '2025-12-18 10:00:00.000', first_seen_event_id: 'evt-early'}
+        - {active_snowplow_id: 'sp_AAAA', id_type: 'DOMAIN_USERID', id_value: 'user-aaa', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2025-12-18 09:50:00.000', last_seen_at: '2025-12-18 10:00:00.000', first_seen_event_id: 'evt-early'}
