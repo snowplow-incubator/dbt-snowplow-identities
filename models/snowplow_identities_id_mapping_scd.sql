@@ -78,11 +78,12 @@ WITH ids_affected_this_run AS (
 )
 
 -- Two-stage dedup:
--- 1. By scd_key (= snowplow_id + effective_at + change_type): when a child's parent changes
---    across batches (intermediate → final), both rows share the same scd_key. Keep the latest
---    (new batch wins over historical, so the resolved parent replaces the stale one).
--- 2. By (snowplow_id, change_type): when the same identity is re-emitted with a different
---    effective_at across batches (e.g. late-arriving events), keep the earliest effective_at.
+-- 1. By scd_key: when a child's parent changes across batches (intermediate → final),
+--    both rows share the same scd_key. Keep the new batch's row (correct parent).
+--    For "created" rows (same parent, same scd_key), keep the earliest effective_at.
+-- 2. By (snowplow_id, active_snowplow_id, change_type): collapse any remaining duplicates
+--    (e.g. re-emitted "created" rows with different effective_at that got different scd_keys
+--    due to the effective_at-excluded key design). Keep earliest effective_at.
 , deduped_by_key AS (
     SELECT
         scd_key,
@@ -93,7 +94,7 @@ WITH ids_affected_this_run AS (
     FROM combined
     QUALIFY ROW_NUMBER() OVER (
         PARTITION BY scd_key
-        ORDER BY source_rank ASC
+        ORDER BY effective_at ASC, source_rank ASC
     ) = 1
 )
 
