@@ -25,8 +25,7 @@ with new_identifiers as (
         last_app_id,
         first_derived_tstamp,
         last_derived_tstamp,
-        first_seen_event_id,
-        {{ dbt_utils.generate_surrogate_key(['id_type', 'id_value']) }} as uuid
+        first_seen_event_id
     from {{ ref('snowplow_identities_new_identifiers_this_run') }}
 )
 
@@ -34,13 +33,13 @@ with new_identifiers as (
     select
         a.id_type,
         a.id_value,
-        a.uuid,
         a.first_app_id,
         a.last_app_id,
         a.first_derived_tstamp as first_seen_at,
         a.last_derived_tstamp as last_seen_at,
         a.first_seen_event_id,
-        coalesce(id_map.active_snowplow_id, a.snowplow_id) as active_snowplow_id
+        coalesce(id_map.active_snowplow_id, a.snowplow_id) as active_snowplow_id,
+        {{ dbt_utils.generate_surrogate_key(['coalesce(id_map.active_snowplow_id, a.snowplow_id)', 'a.id_type', 'a.id_value']) }} as uuid
     from new_identifiers a
     left join {{ ref('snowplow_identities_snowplow_id_mapping') }} id_map
         on a.snowplow_id = id_map.snowplow_id
@@ -53,12 +52,12 @@ with new_identifiers as (
         active_snowplow_id,
         id_type,
         id_value,
-        first_value(first_app_id) over (partition by active_snowplow_id, id_type, id_value, uuid order by first_seen_at asc) as first_app_id,
-        first_value(last_app_id) over (partition by active_snowplow_id, id_type, id_value, uuid order by last_seen_at desc) as last_app_id,
-        min(first_seen_at) over (partition by active_snowplow_id, id_type, id_value, uuid) as first_seen_at,
-        max(last_seen_at) over (partition by active_snowplow_id, id_type, id_value, uuid) as last_seen_at,
-        first_value(first_seen_event_id) over (partition by active_snowplow_id, id_type, id_value, uuid order by first_seen_at asc) as first_seen_event_id,
-        row_number() over (partition by active_snowplow_id, id_type, id_value, uuid order by first_seen_at asc) as rn
+        first_value(first_app_id) over (partition by active_snowplow_id, id_type, id_value order by first_seen_at asc) as first_app_id,
+        first_value(last_app_id) over (partition by active_snowplow_id, id_type, id_value order by last_seen_at desc) as last_app_id,
+        min(first_seen_at) over (partition by active_snowplow_id, id_type, id_value) as first_seen_at,
+        max(last_seen_at) over (partition by active_snowplow_id, id_type, id_value) as last_seen_at,
+        first_value(first_seen_event_id) over (partition by active_snowplow_id, id_type, id_value order by first_seen_at asc) as first_seen_event_id,
+        row_number() over (partition by active_snowplow_id, id_type, id_value order by first_seen_at asc) as rn
     from with_current_mapping
 )
 
