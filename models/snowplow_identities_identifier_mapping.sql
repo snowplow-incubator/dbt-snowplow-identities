@@ -43,7 +43,7 @@ with new_from_this_run as (
 
 , existing_to_repoint as (
     select
-        hist.uuid,
+        {{ dbt_utils.generate_surrogate_key(['coalesce(id_map.active_snowplow_id, hist.active_snowplow_id)', 'hist.id_type', 'hist.id_value']) }} as uuid,
         coalesce(id_map.active_snowplow_id, hist.active_snowplow_id) as active_snowplow_id,
         hist.id_type,
         hist.id_value,
@@ -57,7 +57,35 @@ with new_from_this_run as (
         on hist.active_snowplow_id = id_map.snowplow_id
     where hist.active_snowplow_id in (select snowplow_id from merged_ids_this_run)
     and not exists (
-        select 1 from new_from_this_run n where n.uuid = hist.uuid
+        select 1 from new_from_this_run n
+        where n.active_snowplow_id = coalesce(id_map.active_snowplow_id, hist.active_snowplow_id)
+        and n.id_type = hist.id_type
+        and n.id_value = hist.id_value
+    )
+)
+
+-- Resolve historical rows' active_snowplow_id through the current mapping,
+-- so rows with a stale parent (pre-merge) can match against the new parent.
+-- Filtered to only identifiers present in this batch to avoid full table scan.
+, historical_resolved as (
+    select
+        coalesce(im.active_snowplow_id, h.active_snowplow_id) as resolved_active_snowplow_id,
+        h.id_type,
+        h.id_value,
+        h.first_app_id,
+        h.last_app_id,
+        h.first_seen_at,
+        h.last_seen_at,
+        h.first_seen_event_id
+    from {{ this }} h
+    inner join (select distinct id_type, id_value from new_from_this_run) n
+        on h.id_type = n.id_type and h.id_value = n.id_value
+    left join id_mapping im
+        on h.active_snowplow_id = im.snowplow_id
+    where h.active_snowplow_id in (
+        select distinct active_snowplow_id from new_from_this_run
+        union all
+        select distinct snowplow_id from merged_ids_this_run
     )
 )
 
@@ -76,8 +104,10 @@ with new_from_this_run as (
         case when h.first_seen_at is not null and h.first_seen_at <= c.first_seen_at
              then h.first_seen_event_id else c.first_seen_event_id end as first_seen_event_id
     from new_from_this_run c
-    left join {{ this }} h
-        on c.uuid = h.uuid
+    left join historical_resolved h
+        on c.active_snowplow_id = h.resolved_active_snowplow_id
+        and c.id_type = h.id_type
+        and c.id_value = h.id_value
 )
 
 , new_ranked as (
@@ -86,12 +116,12 @@ with new_from_this_run as (
         active_snowplow_id,
         id_type,
         id_value,
-        first_value(first_app_id) over (partition by uuid, active_snowplow_id, id_type, id_value order by first_seen_at asc) as first_app_id,
-        first_value(last_app_id) over (partition by uuid, active_snowplow_id, id_type, id_value order by last_seen_at desc) as last_app_id,
-        min(first_seen_at) over (partition by uuid, active_snowplow_id, id_type, id_value) as first_seen_at,
-        max(last_seen_at) over (partition by uuid, active_snowplow_id, id_type, id_value) as last_seen_at,
-        first_value(first_seen_event_id) over (partition by uuid, active_snowplow_id, id_type, id_value order by first_seen_at asc) as first_seen_event_id,
-        row_number() over (partition by uuid, active_snowplow_id, id_type, id_value order by first_seen_at asc) as rn
+        first_value(first_app_id) over (partition by active_snowplow_id, id_type, id_value order by first_seen_at asc) as first_app_id,
+        first_value(last_app_id) over (partition by active_snowplow_id, id_type, id_value order by last_seen_at desc) as last_app_id,
+        min(first_seen_at) over (partition by active_snowplow_id, id_type, id_value) as first_seen_at,
+        max(last_seen_at) over (partition by active_snowplow_id, id_type, id_value) as last_seen_at,
+        first_value(first_seen_event_id) over (partition by active_snowplow_id, id_type, id_value order by first_seen_at asc) as first_seen_event_id,
+        row_number() over (partition by active_snowplow_id, id_type, id_value order by first_seen_at asc) as rn
     from new_with_history
 )
 
