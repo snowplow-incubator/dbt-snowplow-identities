@@ -22,7 +22,7 @@ unit_tests:
           select
             'evt-003' as merge_event_id,
             'sp_AAAA' as active_snowplow_id,
-            parse_json('[{"snowplowId":"sp_BBBB","createdAt":"2025-12-18T10:01:00.500Z","mergedAt":"2025-12-18T10:02:00.000Z","triggeringEventId":"evt-003"}]') as merged,
+            parse_json('[{"snowplow_id":"sp_BBBB","created_at":"2025-12-18T10:01:00.500Z","merged_at":"2025-12-18T10:02:00.000Z","triggering_event_id":"evt-003"}]') as merged,
             parse_json('["sp_BBBB"]') as merges,
             '2025-12-18 10:02:00.100'::timestamp as collector_tstamp,
             '2025-12-18 10:02:00.000'::timestamp as derived_tstamp
@@ -79,7 +79,7 @@ unit_tests:
           select
             'evt-003' as merge_event_id,
             'sp_BBBB' as active_snowplow_id,
-            parse_json('[{"snowplowId":"sp_AAAA","createdAt":"2025-12-15T08:00:00.500Z","mergedAt":"2025-12-18T10:02:00.000Z","triggeringEventId":"evt-003"}]') as merged,
+            parse_json('[{"snowplow_id":"sp_AAAA","created_at":"2025-12-15T08:00:00.500Z","merged_at":"2025-12-18T10:02:00.000Z","triggering_event_id":"evt-003"}]') as merged,
             parse_json('["sp_AAAA"]') as merges,
             '2025-12-18 10:02:00.100'::timestamp as collector_tstamp,
             '2025-12-18 10:02:00.000'::timestamp as derived_tstamp

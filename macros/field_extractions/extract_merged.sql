@@ -19,9 +19,9 @@ You may obtain a copy of the Snowplow Personal and Academic License Version 1.0 
 {% macro snowflake__extract_merged() %}
     select
         p.active_snowplow_id,
-        m.value:snowplowId::STRING AS snowplow_id,
-        m.value:mergedAt::timestamp AS merged_at,
-        min(m.value:triggeringEventId::STRING) AS triggering_event_id
+        m.value:snowplow_id::STRING AS snowplow_id,
+        m.value:merged_at::timestamp AS merged_at,
+        min(m.value:triggering_event_id::STRING) AS triggering_event_id
     from {{ ref('snowplow_identities_merge_events_this_run') }} as p,
         table(flatten(input => p.merged)) as m
     group by 1, 2, 3
