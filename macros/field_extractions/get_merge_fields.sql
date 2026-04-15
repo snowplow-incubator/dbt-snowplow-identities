@@ -19,7 +19,7 @@ You may obtain a copy of the Snowplow Personal and Academic License Version 1.0 
 
   ,  {{ snowplow_utils.get_optional_fields(
         enabled=true,
-        col_prefix='unstruct_event_com_snowplowanalytics_snowplow_identity_merge_1',
+        col_prefix='unstruct_event_com_snowplowanalytics_snowplow_identity_merge_2',
         fields=bq_identity_fields,
         relation=source('atomic', 'events') if 'integration_tests' in project_name and 'snowplow' in project_name else source('atomic', 'events') ,
         relation_alias=none) }}
@@ -28,8 +28,8 @@ You may obtain a copy of the Snowplow Personal and Academic License Version 1.0 
 
 {% macro snowflake__get_merge_fields() %}
 
-    , unstruct_event_com_snowplowanalytics_snowplow_identity_merge_1:snowplowId::varchar AS active_snowplow_id
-    , unstruct_event_com_snowplowanalytics_snowplow_identity_merge_1:merged::array AS merged
-    , unstruct_event_com_snowplowanalytics_snowplow_identity_merge_1:merges::array AS merges
+    , unstruct_event_com_snowplowanalytics_snowplow_identity_merge_2:snowplow_id::varchar AS active_snowplow_id
+    , unstruct_event_com_snowplowanalytics_snowplow_identity_merge_2:merged::array AS merged
+    , unstruct_event_com_snowplowanalytics_snowplow_identity_merge_2:merges::array AS merges
 
 {% endmacro %}
