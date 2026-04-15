@@ -17,7 +17,7 @@ unit_tests:
             'identity_merge' as event_name,
             '2025-12-18 10:02:00.000'::timestamp as derived_tstamp,
             '2025-12-18 10:02:00.100'::timestamp as collector_tstamp,
-            parse_json('{"snowplowId":"sp_AAAA","createdAt":"2025-12-18T10:00:00.500Z","merged":[{"snowplowId":"sp_BBBB","createdAt":"2025-12-18T10:01:00.500Z","mergedAt":"2025-12-18T10:01:30.000Z","triggeringEventId":"evt-003"}],"merges":["sp_BBBB"]}') as unstruct_event_com_snowplowanalytics_snowplow_identity_merge_1
+            parse_json('{"snowplow_id":"sp_AAAA","created_at":"2025-12-18T10:00:00.500Z","merged":[{"snowplow_id":"sp_BBBB","created_at":"2025-12-18T10:01:00.500Z","merged_at":"2025-12-18T10:01:30.000Z","triggering_event_id":"evt-003"}],"merges":["sp_BBBB"]}') as unstruct_event_com_snowplowanalytics_snowplow_identity_merge_2
     expect:
       rows:
         - {merge_event_id: 'evt-003', active_snowplow_id: 'sp_AAAA', collector_tstamp: '2025-12-18 10:02:00.100', derived_tstamp: '2025-12-18 10:02:00.000'}
@@ -38,7 +38,7 @@ unit_tests:
             'identity_merge' as event_name,
             '2025-12-18 10:03:00.000'::timestamp as derived_tstamp,
             '2025-12-18 10:03:00.100'::timestamp as collector_tstamp,
-            parse_json('{"snowplowId":"sp_AAAA","createdAt":"2025-12-18T10:00:00.500Z","merged":[{"snowplowId":"sp_BBBB","createdAt":"2025-12-18T10:01:00.500Z","mergedAt":"2025-12-18T10:03:00.000Z","triggeringEventId":"evt-005"},{"snowplowId":"sp_CCCC","createdAt":"2025-12-18T10:01:30.500Z","mergedAt":"2025-12-18T10:03:00.000Z","triggeringEventId":"evt-005"}],"merges":["sp_BBBB","sp_CCCC"]}') as unstruct_event_com_snowplowanalytics_snowplow_identity_merge_1
+            parse_json('{"snowplow_id":"sp_AAAA","created_at":"2025-12-18T10:00:00.500Z","merged":[{"snowplow_id":"sp_BBBB","created_at":"2025-12-18T10:01:00.500Z","merged_at":"2025-12-18T10:03:00.000Z","triggering_event_id":"evt-005"},{"snowplow_id":"sp_CCCC","created_at":"2025-12-18T10:01:30.500Z","merged_at":"2025-12-18T10:03:00.000Z","triggering_event_id":"evt-005"}],"merges":["sp_BBBB","sp_CCCC"]}') as unstruct_event_com_snowplowanalytics_snowplow_identity_merge_2
     expect:
       rows:
         - {merge_event_id: 'evt-005', active_snowplow_id: 'sp_AAAA', collector_tstamp: '2025-12-18 10:03:00.100', derived_tstamp: '2025-12-18 10:03:00.000'}

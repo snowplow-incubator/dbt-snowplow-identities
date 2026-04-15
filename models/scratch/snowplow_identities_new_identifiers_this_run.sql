@@ -30,14 +30,14 @@ with events as (
     {% if target.type == 'bigquery' %}
         {{ snowplow_utils.get_optional_fields(
             enabled=true,
-            col_prefix='contexts_com_snowplowanalytics_snowplow_identity_1',
+            col_prefix='contexts_com_snowplowanalytics_snowplow_identity_2',
             fields=[{'field': ('snowplow_id', 'snowplow_id'), 'dtype': 'string'}],
             relation=source('atomic', 'events') if 'integration_tests' in project_name and 'snowplow' in project_name else source('atomic', 'events'),
             relation_alias=none,
             include_field_alias=false
         ) }} is not null
     {% else %}
-        contexts_com_snowplowanalytics_snowplow_identity_1 is not null
+        contexts_com_snowplowanalytics_snowplow_identity_2 is not null
     {% endif %}
     qualify row_number() over (partition by event_id order by collector_tstamp) = 1
 )
