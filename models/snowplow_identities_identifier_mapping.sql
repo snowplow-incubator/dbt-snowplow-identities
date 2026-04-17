@@ -20,7 +20,8 @@ You may obtain a copy of the Snowplow Personal and Academic License Version 1.0 
       'delta.autoOptimize.optimizeWrite' : 'true',
       'delta.autoOptimize.autoCompact' : 'true'
     },
-    meta={'upsert_date_key': 'last_seen_at', 'snowplow_optimize': true}
+    meta={'upsert_date_key': 'last_seen_at', 'snowplow_optimize': true},
+    post_hook=["{{ snowplow_identities.delete_stale_identifier_mapping_rows() }}"]
 ) }}
 
 with new_from_this_run as (
