@@ -110,3 +110,40 @@ Tests: three-way merge from single event.
 ### cross_batch_triple
 Batches 1-4: A created in batch 1. B created and bridged in batch 2. C in batch 3. D in batch 4.
 Tests: progressive incremental merging, one child per batch.
+
+### shared_identifier_collision
+Batch 1: A created (uid=alice, duid, nuid). B created (uid=bob, duid, nuid_shared).
+Batch 2: A gains nuid_shared via new event.
+Config: `(unique :user_id)` prevents merge, so nuid_shared belongs to both A and B.
+Tests: identifier_mapping uuid collision when same identifier maps to multiple identities.
+
+### late_merge
+Batch 1: A and B created separately.
+Batch 3: Late-arriving bridge event (derived_tstamp before batch 1) carries identifiers from both.
+Tests: SCD backdating of merge effective_at, late-arriving bridge.
+
+### reverse_chain
+Batch 1: A(t=10), B(t=5), C(t=1) created.
+Batch 2: A+B bridge → B is root (older).
+Batch 3: B+C bridge → C becomes root (oldest). A must cascade-repoint from B to C.
+Tests: cascade repointing when root changes, SCD chain accuracy.
+
+### merge_then_uid
+Batch 1: A(duid, nuid) and B(duid, nuid) created.
+Batch 2: A+B bridge (no uid on either, merge succeeds).
+Batch 3: A gains uid=alice, B gains uid=bob.
+Config: `(unique :user_id)`.
+Tests: already-merged identities gaining conflicting unique identifiers.
+
+### interleaved_merge
+Batch 1: A, B, C, D created.
+Batch 2: A+B bridge → A absorbs B.
+Batch 3: C+D bridge → C absorbs D.
+Batch 4: B+D bridge → cross-group merge through merged children. Engine resolves to A+C merge.
+Tests: cross-group merge via intermediaries, 4-batch cascade repointing.
+
+### deep_single_batch
+Batch 1: A, B, C, D, E, F created.
+Batch 2: Sequential bridges with drain between each: A+B, B+C, C+D, D+E, E+F.
+Engine emits one cumulative merge event with all 5 children merged into A.
+Tests: deep chain in single batch, cumulative merge event at depth.
