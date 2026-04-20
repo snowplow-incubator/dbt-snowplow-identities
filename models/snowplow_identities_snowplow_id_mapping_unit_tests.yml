@@ -9,6 +9,7 @@ unit_tests:
     model: snowplow_identities_snowplow_id_mapping
     overrides:
       macros:
+        is_incremental: false
         snowplow_utils.is_run_with_new_events: "true"
     given:
       - input: ref('snowplow_identities_snowplow_id_mapping_this_run')
