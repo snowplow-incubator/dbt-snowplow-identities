@@ -142,3 +142,79 @@ unit_tests:
     expect:
       rows:
         - {snowplow_id: 'sp_AAAA', active_snowplow_id: 'sp_AAAA', effective_at: '2025-12-18 10:00:00.000', superseded_at: null, change_type: 'created', is_current: true}
+
+  - name: test__snowplow_identities_id_mapping_scd__cascade_merge_full_refresh
+    description: >
+      Full refresh cascade: A created, merged into B, then B merged into C.
+      SCD should show: A→A superseded at t1, A→B superseded at t2,
+      A→C current. B→B superseded at t2, B→C current. C→C current.
+    model: snowplow_identities_id_mapping_scd
+    overrides:
+      macros:
+        is_incremental: false
+    given:
+      - input: ref('snowplow_identities_id_changes_this_run')
+        rows:
+          - {id_change_key: 'key-create-aaa', snowplow_id: 'sp_AAAA', previous_snowplow_id: null, effective_at: '2025-12-18 10:00:00.000', changed_at: '2025-12-18 10:15:00.000', change_type: 'created', first_seen_event_id: 'evt-001', first_seen_app_id: 'web'}
+          - {id_change_key: 'key-create-bbb', snowplow_id: 'sp_BBBB', previous_snowplow_id: null, effective_at: '2025-12-18 10:01:00.000', changed_at: '2025-12-18 10:15:00.000', change_type: 'created', first_seen_event_id: 'evt-002', first_seen_app_id: 'web'}
+          - {id_change_key: 'key-create-ccc', snowplow_id: 'sp_CCCC', previous_snowplow_id: null, effective_at: '2025-12-18 10:02:00.000', changed_at: '2025-12-18 10:15:00.000', change_type: 'created', first_seen_event_id: 'evt-003', first_seen_app_id: 'web'}
+          # A→B intermediate merge at t1
+          - {id_change_key: 'key-merge-ab', snowplow_id: 'sp_BBBB', previous_snowplow_id: 'sp_AAAA', effective_at: '2025-12-18 10:05:00.000', changed_at: '2025-12-18 10:15:00.000', change_type: 'merged', first_seen_event_id: 'evt-010', first_seen_app_id: 'web'}
+          # A→C cascade at t2
+          - {id_change_key: 'key-merge-ac', snowplow_id: 'sp_CCCC', previous_snowplow_id: 'sp_AAAA', effective_at: '2025-12-18 10:10:00.000', changed_at: '2025-12-18 10:15:00.000', change_type: 'merged', first_seen_event_id: 'evt-010', first_seen_app_id: 'web'}
+          # B→C direct merge at t2
+          - {id_change_key: 'key-merge-bc', snowplow_id: 'sp_CCCC', previous_snowplow_id: 'sp_BBBB', effective_at: '2025-12-18 10:10:00.000', changed_at: '2025-12-18 10:15:00.000', change_type: 'merged', first_seen_event_id: 'evt-020', first_seen_app_id: 'web'}
+      - input: ref('snowplow_identities_snowplow_id_mapping_this_run')
+        rows:
+          - {snowplow_id: 'sp_AAAA', active_snowplow_id: 'sp_CCCC', merged_at: '2025-12-18 10:05:00.000', model_tstamp: '2025-12-18 10:15:00.000'}
+          - {snowplow_id: 'sp_BBBB', active_snowplow_id: 'sp_CCCC', merged_at: '2025-12-18 10:10:00.000', model_tstamp: '2025-12-18 10:15:00.000'}
+    expect:
+      rows:
+        # A: created → B → C
+        - {snowplow_id: 'sp_AAAA', active_snowplow_id: 'sp_AAAA', effective_at: '2025-12-18 10:00:00.000', superseded_at: '2025-12-18 10:05:00.000', change_type: 'created', is_current: false}
+        - {snowplow_id: 'sp_AAAA', active_snowplow_id: 'sp_BBBB', effective_at: '2025-12-18 10:05:00.000', superseded_at: '2025-12-18 10:10:00.000', change_type: 'merged', is_current: false}
+        - {snowplow_id: 'sp_AAAA', active_snowplow_id: 'sp_CCCC', effective_at: '2025-12-18 10:10:00.000', superseded_at: null, change_type: 'merged', is_current: true}
+        # B: created → C
+        - {snowplow_id: 'sp_BBBB', active_snowplow_id: 'sp_BBBB', effective_at: '2025-12-18 10:01:00.000', superseded_at: '2025-12-18 10:10:00.000', change_type: 'created', is_current: false}
+        - {snowplow_id: 'sp_BBBB', active_snowplow_id: 'sp_CCCC', effective_at: '2025-12-18 10:10:00.000', superseded_at: null, change_type: 'merged', is_current: true}
+        # C: created (root, never merged)
+        - {snowplow_id: 'sp_CCCC', active_snowplow_id: 'sp_CCCC', effective_at: '2025-12-18 10:02:00.000', superseded_at: null, change_type: 'created', is_current: true}
+
+  - name: test__snowplow_identities_id_mapping_scd__cascade_merge_incremental
+    description: >
+      Incremental cascade: A→B was recorded in a prior batch. Now B merges
+      into C. The SCD should add A→C@t2 while preserving A→B@t1,
+      and set superseded_at on A→B.
+    model: snowplow_identities_id_mapping_scd
+    overrides:
+      macros:
+        is_incremental: true
+    given:
+      - input: ref('snowplow_identities_id_changes_this_run')
+        rows:
+          # A→C cascade at t2
+          - {id_change_key: 'key-merge-ac', snowplow_id: 'sp_CCCC', previous_snowplow_id: 'sp_AAAA', effective_at: '2025-12-18 10:10:00.000', changed_at: '2025-12-18 10:15:00.000', change_type: 'merged', first_seen_event_id: 'evt-010', first_seen_app_id: 'web'}
+          # B→C direct merge at t2
+          - {id_change_key: 'key-merge-bc', snowplow_id: 'sp_CCCC', previous_snowplow_id: 'sp_BBBB', effective_at: '2025-12-18 10:10:00.000', changed_at: '2025-12-18 10:15:00.000', change_type: 'merged', first_seen_event_id: 'evt-020', first_seen_app_id: 'web'}
+      - input: ref('snowplow_identities_snowplow_id_mapping_this_run')
+        rows:
+          - {snowplow_id: 'sp_AAAA', active_snowplow_id: 'sp_CCCC', merged_at: '2025-12-18 10:05:00.000', model_tstamp: '2025-12-18 10:15:00.000'}
+          - {snowplow_id: 'sp_BBBB', active_snowplow_id: 'sp_CCCC', merged_at: '2025-12-18 10:10:00.000', model_tstamp: '2025-12-18 10:15:00.000'}
+      - input: this
+        rows:
+          # Historical: A created, A→B merged, B created, C created (from prior batch)
+          - {scd_key: 'key-create-aaa', snowplow_id: 'sp_AAAA', active_snowplow_id: 'sp_AAAA', effective_at: '2025-12-18 10:00:00.000', change_type: 'created'}
+          - {scd_key: 'key-merge-ab', snowplow_id: 'sp_AAAA', active_snowplow_id: 'sp_BBBB', effective_at: '2025-12-18 10:05:00.000', change_type: 'merged'}
+          - {scd_key: 'key-create-bbb', snowplow_id: 'sp_BBBB', active_snowplow_id: 'sp_BBBB', effective_at: '2025-12-18 10:01:00.000', change_type: 'created'}
+          - {scd_key: 'key-create-ccc', snowplow_id: 'sp_CCCC', active_snowplow_id: 'sp_CCCC', effective_at: '2025-12-18 10:02:00.000', change_type: 'created'}
+    expect:
+      rows:
+        # A: created → B → C (full chain preserved)
+        - {snowplow_id: 'sp_AAAA', active_snowplow_id: 'sp_AAAA', effective_at: '2025-12-18 10:00:00.000', superseded_at: '2025-12-18 10:05:00.000', change_type: 'created', is_current: false}
+        - {snowplow_id: 'sp_AAAA', active_snowplow_id: 'sp_BBBB', effective_at: '2025-12-18 10:05:00.000', superseded_at: '2025-12-18 10:10:00.000', change_type: 'merged', is_current: false}
+        - {snowplow_id: 'sp_AAAA', active_snowplow_id: 'sp_CCCC', effective_at: '2025-12-18 10:10:00.000', superseded_at: null, change_type: 'merged', is_current: true}
+        # B: created → C
+        - {snowplow_id: 'sp_BBBB', active_snowplow_id: 'sp_BBBB', effective_at: '2025-12-18 10:01:00.000', superseded_at: '2025-12-18 10:10:00.000', change_type: 'created', is_current: false}
+        - {snowplow_id: 'sp_BBBB', active_snowplow_id: 'sp_CCCC', effective_at: '2025-12-18 10:10:00.000', superseded_at: null, change_type: 'merged', is_current: true}
+        # C: created (root)
+        - {snowplow_id: 'sp_CCCC', active_snowplow_id: 'sp_CCCC', effective_at: '2025-12-18 10:02:00.000', superseded_at: null, change_type: 'created', is_current: true}
