@@ -1,5 +1,45 @@
 version: 2
 
+sources:
+  # The _affected snapshot is written by a pre-hook on
+  # snowplow_identities_snowplow_id_mapping via
+  # `CREATE OR REPLACE TABLE {{ this.schema }}.{{ this.identifier }}_affected`.
+  # Its schema must match the schema dbt resolves for that model —
+  # target.schema + '_derived' under default generate_schema_name. If a
+  # downstream user overrides generate_schema_name, both this declaration
+  # and the pre-hook's {{ this.schema }} must be kept in lockstep.
+  - name: snowplow_identities_internal
+    description: >
+      Internal snapshots created via pre-hooks. Not managed as dbt models,
+      but declared here so refs stay explicit and parse-time-checked.
+    schema: "{{ target.schema }}_derived"
+    tables:
+      - name: snowplow_id_mapping_affected
+        identifier: snowplow_identities_snowplow_id_mapping_affected
+        description: >
+          Snapshot of rows from snowplow_identities_snowplow_id_mapping that
+          are about to be re-rooted in the current run. Populated by the
+          pre-hook on snowplow_identities_snowplow_id_mapping before its
+          incremental merge.
+        columns:
+          - name: snowplow_id
+            description: The child identity whose root is about to change.
+            data_type: string
+            tests:
+              - unique
+              - not_null
+          - name: active_snowplow_id
+            description: The parent it pointed at before this run.
+            data_type: string
+            tests:
+              - not_null
+          - name: merged_at
+            description: Pre-run merged_at.
+            data_type: timestamp
+          - name: model_tstamp
+            description: Pre-run model_tstamp.
+            data_type: timestamp
+
 models:
   - name: snowplow_identities_id_changes_this_run
     description: '{{ doc("table_id_changes_this_run") }}'
