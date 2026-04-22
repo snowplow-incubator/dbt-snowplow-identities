@@ -9,6 +9,9 @@ unit_tests:
     model: snowplow_identities_id_changes_this_run
     config:
       tags: ["snowflake_only"]
+    overrides:
+      macros:
+        is_incremental: false
     given:
       - input: ref('snowplow_identities_new_identities_this_run')
         rows:
@@ -29,6 +32,15 @@ unit_tests:
       - input: ref('snowplow_identities_snowplow_id_mapping_this_run')
         rows:
           - {snowplow_id: 'sp_BBBB', active_snowplow_id: 'sp_AAAA', merged_at: '2025-12-18 10:02:00.000', model_tstamp: '2025-12-18 10:05:00.000'}
+      - input: source('snowplow_identities_internal', 'snowplow_id_mapping_affected')
+        format: sql
+        rows: |
+          select
+            ''::varchar as snowplow_id,
+            ''::varchar as active_snowplow_id,
+            '1970-01-01'::timestamp as merged_at,
+            '1970-01-01'::timestamp as model_tstamp
+          where 1 = 0
     # id_change_key and changed_at are omitted from expected rows:
     # - id_change_key is a surrogate key (non-deterministic hash)
     # - changed_at uses snowplow_utils.current_timestamp_in_utc() which
@@ -66,6 +78,9 @@ unit_tests:
     model: snowplow_identities_id_changes_this_run
     config:
       tags: ["snowflake_only"]
+    overrides:
+      macros:
+        is_incremental: false
     given:
       - input: ref('snowplow_identities_new_identities_this_run')
         rows:
@@ -86,7 +101,245 @@ unit_tests:
       - input: ref('snowplow_identities_snowplow_id_mapping_this_run')
         rows:
           - {snowplow_id: 'sp_AAAA', active_snowplow_id: 'sp_BBBB', merged_at: '2025-12-18 10:02:00.000', model_tstamp: '2025-12-18 10:10:00.000'}
+      - input: source('snowplow_identities_internal', 'snowplow_id_mapping_affected')
+        format: sql
+        rows: |
+          select
+            ''::varchar as snowplow_id,
+            ''::varchar as active_snowplow_id,
+            '1970-01-01'::timestamp as merged_at,
+            '1970-01-01'::timestamp as model_tstamp
+          where 1 = 0
     expect:
       rows:
         - {snowplow_id: 'sp_BBBB', previous_snowplow_id: null, effective_at: '2025-12-18 10:01:00.000', change_type: 'created', first_seen_event_id: 'evt-002', first_seen_app_id: 'mobile'}
         - {snowplow_id: 'sp_BBBB', previous_snowplow_id: 'sp_AAAA', effective_at: '2025-12-18 10:02:00.000', change_type: 'merged', first_seen_event_id: 'evt-003', first_seen_app_id: 'web'}
+
+  - name: test__snowplow_identities_id_changes_this_run__cascade_merge_single_batch
+    description: >
+      Full-refresh cascade: A, B, C created. A merges into B at t1,
+      then B merges into C at t2. Both events in one batch. Should emit:
+      A→B@t1 (intermediate), A→C@t2 (cascade), B→C@t2 (direct).
+    model: snowplow_identities_id_changes_this_run
+    config:
+      tags: ["snowflake_only"]
+    overrides:
+      macros:
+        is_incremental: false
+    given:
+      - input: ref('snowplow_identities_new_identities_this_run')
+        rows:
+          - {snowplow_id: 'sp_AAAA', created_at: '2025-12-18 10:00:00.500', first_seen_event_id: 'evt-001', first_app_id: 'web', last_app_id: 'web', domain_userid: 'user-aaa', user_id: null, first_derived_tstamp: '2025-12-18 10:00:00.000', last_derived_tstamp: '2025-12-18 10:00:10.000'}
+          - {snowplow_id: 'sp_BBBB', created_at: '2025-12-18 10:01:00.500', first_seen_event_id: 'evt-002', first_app_id: 'web', last_app_id: 'web', domain_userid: 'user-bbb', user_id: null, first_derived_tstamp: '2025-12-18 10:01:00.000', last_derived_tstamp: '2025-12-18 10:01:10.000'}
+          - {snowplow_id: 'sp_CCCC', created_at: '2025-12-18 10:02:00.500', first_seen_event_id: 'evt-003', first_app_id: 'web', last_app_id: 'web', domain_userid: 'user-ccc', user_id: null, first_derived_tstamp: '2025-12-18 10:02:00.000', last_derived_tstamp: '2025-12-18 10:02:10.000'}
+      - input: ref('snowplow_identities_new_identities')
+        rows: []
+      - input: ref('snowplow_identities_merge_events_this_run')
+        format: sql
+        rows: |
+          -- Event 1: B absorbs A at t1
+          select
+            'evt-010' as merge_event_id,
+            'sp_BBBB' as active_snowplow_id,
+            parse_json('[{"snowplow_id":"sp_AAAA","created_at":"2025-12-18T10:00:00.500Z","merged_at":"2025-12-18T10:05:00.000Z","triggering_event_id":"evt-010"}]') as merged,
+            parse_json('["sp_AAAA"]') as merges,
+            '2025-12-18 10:05:00.100'::timestamp as collector_tstamp,
+            '2025-12-18 10:05:00.000'::timestamp as derived_tstamp
+          union all
+          -- Event 2: C absorbs B (and transitively A) at t2
+          select
+            'evt-020' as merge_event_id,
+            'sp_CCCC' as active_snowplow_id,
+            parse_json('[{"snowplow_id":"sp_AAAA","created_at":"2025-12-18T10:00:00.500Z","merged_at":"2025-12-18T10:05:00.000Z","triggering_event_id":"evt-010"},{"snowplow_id":"sp_BBBB","created_at":"2025-12-18T10:01:00.500Z","merged_at":"2025-12-18T10:10:00.000Z","triggering_event_id":"evt-020"}]') as merged,
+            parse_json('["sp_AAAA","sp_BBBB"]') as merges,
+            '2025-12-18 10:10:00.100'::timestamp as collector_tstamp,
+            '2025-12-18 10:10:00.000'::timestamp as derived_tstamp
+      - input: ref('snowplow_identities_snowplow_id_mapping_this_run')
+        rows:
+          - {snowplow_id: 'sp_AAAA', active_snowplow_id: 'sp_CCCC', merged_at: '2025-12-18 10:05:00.000', model_tstamp: '2025-12-18 10:15:00.000'}
+          - {snowplow_id: 'sp_BBBB', active_snowplow_id: 'sp_CCCC', merged_at: '2025-12-18 10:10:00.000', model_tstamp: '2025-12-18 10:15:00.000'}
+      - input: source('snowplow_identities_internal', 'snowplow_id_mapping_affected')
+        format: sql
+        rows: |
+          select
+            ''::varchar as snowplow_id,
+            ''::varchar as active_snowplow_id,
+            '1970-01-01'::timestamp as merged_at,
+            '1970-01-01'::timestamp as model_tstamp
+          where 1 = 0
+    expect:
+      rows:
+        # Creates
+        - {snowplow_id: 'sp_AAAA', previous_snowplow_id: null, effective_at: '2025-12-18 10:00:00.000', change_type: 'created', first_seen_event_id: 'evt-001', first_seen_app_id: 'web'}
+        - {snowplow_id: 'sp_BBBB', previous_snowplow_id: null, effective_at: '2025-12-18 10:01:00.000', change_type: 'created', first_seen_event_id: 'evt-002', first_seen_app_id: 'web'}
+        - {snowplow_id: 'sp_CCCC', previous_snowplow_id: null, effective_at: '2025-12-18 10:02:00.000', change_type: 'created', first_seen_event_id: 'evt-003', first_seen_app_id: 'web'}
+        # A→B intermediate merge at t1
+        - {snowplow_id: 'sp_BBBB', previous_snowplow_id: 'sp_AAAA', effective_at: '2025-12-18 10:05:00.000', change_type: 'merged', first_seen_event_id: 'evt-010', first_seen_app_id: 'web'}
+        # A→C cascade merge at t2 (NOT t1)
+        - {snowplow_id: 'sp_CCCC', previous_snowplow_id: 'sp_AAAA', effective_at: '2025-12-18 10:10:00.000', change_type: 'merged', first_seen_event_id: 'evt-010', first_seen_app_id: 'web'}
+        # B→C direct merge at t2
+        - {snowplow_id: 'sp_CCCC', previous_snowplow_id: 'sp_BBBB', effective_at: '2025-12-18 10:10:00.000', change_type: 'merged', first_seen_event_id: 'evt-020', first_seen_app_id: 'web'}
+
+  # Cross-batch cascade with full cumulative event payload (no TTL loss).
+  # Run 3 sees only event 2 (B→C) as a new merge event. The cumulative
+  # payload carries A@t1 and B@t2. The pre-run snowplow_id_mapping_affected
+  # snapshot contains A→B (captured by the pre-hook because A's active is
+  # being re-rooted this run). Expected: A→C@t2 (cascade) and B→C@t2
+  # (direct). No A→B row — that was emitted in the prior run.
+  - name: test__snowplow_identities_id_changes_this_run__cascade_merge_cross_batch_real
+    description: >
+      Cross-batch cascade via pre-run snapshot. Only B→C event in this batch.
+      Snapshot has {A→B}. Emits A→C@t2 (cascade), B→C@t2 (direct).
+    model: snowplow_identities_id_changes_this_run
+    config:
+      tags: ["snowflake_only"]
+    overrides:
+      macros:
+        is_incremental: true
+    given:
+      - input: ref('snowplow_identities_new_identities_this_run')
+        rows: []
+      - input: ref('snowplow_identities_new_identities')
+        rows:
+          - {snowplow_id: 'sp_AAAA', created_at: '2025-12-18 10:00:00.500', first_seen_event_id: 'evt-001', first_app_id: 'web', last_app_id: 'web', domain_userid: 'user-aaa', user_id: null, first_derived_tstamp: '2025-12-18 10:00:00.000', last_derived_tstamp: '2025-12-18 10:00:10.000'}
+          - {snowplow_id: 'sp_BBBB', created_at: '2025-12-18 10:01:00.500', first_seen_event_id: 'evt-002', first_app_id: 'web', last_app_id: 'web', domain_userid: 'user-bbb', user_id: null, first_derived_tstamp: '2025-12-18 10:01:00.000', last_derived_tstamp: '2025-12-18 10:01:10.000'}
+      - input: ref('snowplow_identities_merge_events_this_run')
+        format: sql
+        rows: |
+          select
+            'evt-020' as merge_event_id,
+            'sp_CCCC' as active_snowplow_id,
+            parse_json('[{"snowplow_id":"sp_AAAA","created_at":"2025-12-18T10:00:00.500Z","merged_at":"2025-12-18T10:05:00.000Z","triggering_event_id":"evt-010"},{"snowplow_id":"sp_BBBB","created_at":"2025-12-18T10:01:00.500Z","merged_at":"2025-12-18T10:10:00.000Z","triggering_event_id":"evt-020"}]') as merged,
+            parse_json('["sp_AAAA","sp_BBBB"]') as merges,
+            '2025-12-18 10:10:00.100'::timestamp as collector_tstamp,
+            '2025-12-18 10:10:00.000'::timestamp as derived_tstamp
+      - input: ref('snowplow_identities_snowplow_id_mapping_this_run')
+        rows:
+          - {snowplow_id: 'sp_AAAA', active_snowplow_id: 'sp_CCCC', merged_at: '2025-12-18 10:05:00.000', model_tstamp: '2025-12-18 10:15:00.000'}
+          - {snowplow_id: 'sp_BBBB', active_snowplow_id: 'sp_CCCC', merged_at: '2025-12-18 10:10:00.000', model_tstamp: '2025-12-18 10:15:00.000'}
+      - input: source('snowplow_identities_internal', 'snowplow_id_mapping_affected')
+        format: sql
+        rows: |
+          select
+            'sp_AAAA'::varchar as snowplow_id,
+            'sp_BBBB'::varchar as active_snowplow_id,
+            '2025-12-18 10:05:00.000'::timestamp as merged_at,
+            '2025-12-18 10:08:00.000'::timestamp as model_tstamp
+    expect:
+      rows:
+        - {snowplow_id: 'sp_CCCC', previous_snowplow_id: 'sp_AAAA', effective_at: '2025-12-18 10:10:00.000', change_type: 'merged', first_seen_event_id: 'evt-010', first_seen_app_id: 'web'}
+        - {snowplow_id: 'sp_CCCC', previous_snowplow_id: 'sp_BBBB', effective_at: '2025-12-18 10:10:00.000', change_type: 'merged', first_seen_event_id: 'evt-020', first_seen_app_id: 'web'}
+
+  # Regression test for false-positive cascade detection.
+  # A and B merge independently into C at different times (no chain).
+  # A's effective_at must stay at t1, NOT be promoted to t2.
+  - name: test__snowplow_identities_id_changes_this_run__independent_merge_no_cascade
+    description: >
+      A merges into C at t1, B merges into C at t2. No chain between A and B.
+      Both events in one batch (full refresh). A's effective_at must be t1
+      (its actual merge time), not t2. Without the cascade_children guard,
+      A would be falsely promoted to t2.
+    model: snowplow_identities_id_changes_this_run
+    config:
+      tags: ["snowflake_only"]
+    overrides:
+      macros:
+        is_incremental: false
+    given:
+      - input: ref('snowplow_identities_new_identities_this_run')
+        rows:
+          - {snowplow_id: 'sp_AAAA', created_at: '2025-12-18 10:00:00.500', first_seen_event_id: 'evt-001', first_app_id: 'web', last_app_id: 'web', domain_userid: 'user-aaa', user_id: null, first_derived_tstamp: '2025-12-18 10:00:00.000', last_derived_tstamp: '2025-12-18 10:00:10.000'}
+          - {snowplow_id: 'sp_BBBB', created_at: '2025-12-18 10:01:00.500', first_seen_event_id: 'evt-002', first_app_id: 'web', last_app_id: 'web', domain_userid: 'user-bbb', user_id: null, first_derived_tstamp: '2025-12-18 10:01:00.000', last_derived_tstamp: '2025-12-18 10:01:10.000'}
+          - {snowplow_id: 'sp_CCCC', created_at: '2025-12-18 10:02:00.500', first_seen_event_id: 'evt-003', first_app_id: 'web', last_app_id: 'web', domain_userid: 'user-ccc', user_id: null, first_derived_tstamp: '2025-12-18 10:02:00.000', last_derived_tstamp: '2025-12-18 10:02:10.000'}
+      - input: ref('snowplow_identities_new_identities')
+        rows: []
+      - input: ref('snowplow_identities_merge_events_this_run')
+        format: sql
+        rows: |
+          -- Event 1: C absorbs A at t1
+          select
+            'evt-010' as merge_event_id,
+            'sp_CCCC' as active_snowplow_id,
+            parse_json('[{"snowplow_id":"sp_AAAA","created_at":"2025-12-18T10:00:00.500Z","merged_at":"2025-12-18T10:05:00.000Z","triggering_event_id":"evt-010"}]') as merged,
+            parse_json('["sp_AAAA"]') as merges,
+            '2025-12-18 10:05:00.100'::timestamp as collector_tstamp,
+            '2025-12-18 10:05:00.000'::timestamp as derived_tstamp
+          union all
+          -- Event 2: C absorbs B at t2 (cumulative array includes A)
+          select
+            'evt-020' as merge_event_id,
+            'sp_CCCC' as active_snowplow_id,
+            parse_json('[{"snowplow_id":"sp_AAAA","created_at":"2025-12-18T10:00:00.500Z","merged_at":"2025-12-18T10:05:00.000Z","triggering_event_id":"evt-010"},{"snowplow_id":"sp_BBBB","created_at":"2025-12-18T10:01:00.500Z","merged_at":"2025-12-18T10:10:00.000Z","triggering_event_id":"evt-020"}]') as merged,
+            parse_json('["sp_AAAA","sp_BBBB"]') as merges,
+            '2025-12-18 10:10:00.100'::timestamp as collector_tstamp,
+            '2025-12-18 10:10:00.000'::timestamp as derived_tstamp
+      - input: ref('snowplow_identities_snowplow_id_mapping_this_run')
+        rows:
+          - {snowplow_id: 'sp_AAAA', active_snowplow_id: 'sp_CCCC', merged_at: '2025-12-18 10:05:00.000', model_tstamp: '2025-12-18 10:15:00.000'}
+          - {snowplow_id: 'sp_BBBB', active_snowplow_id: 'sp_CCCC', merged_at: '2025-12-18 10:10:00.000', model_tstamp: '2025-12-18 10:15:00.000'}
+      - input: source('snowplow_identities_internal', 'snowplow_id_mapping_affected')
+        format: sql
+        rows: |
+          select
+            ''::varchar as snowplow_id,
+            ''::varchar as active_snowplow_id,
+            '1970-01-01'::timestamp as merged_at,
+            '1970-01-01'::timestamp as model_tstamp
+          where 1 = 0
+    expect:
+      rows:
+        # Creates
+        - {snowplow_id: 'sp_AAAA', previous_snowplow_id: null, effective_at: '2025-12-18 10:00:00.000', change_type: 'created', first_seen_event_id: 'evt-001', first_seen_app_id: 'web'}
+        - {snowplow_id: 'sp_BBBB', previous_snowplow_id: null, effective_at: '2025-12-18 10:01:00.000', change_type: 'created', first_seen_event_id: 'evt-002', first_seen_app_id: 'web'}
+        - {snowplow_id: 'sp_CCCC', previous_snowplow_id: null, effective_at: '2025-12-18 10:02:00.000', change_type: 'created', first_seen_event_id: 'evt-003', first_seen_app_id: 'web'}
+        # A→C at t1 (NOT t2 — A merged independently, not via cascade)
+        - {snowplow_id: 'sp_CCCC', previous_snowplow_id: 'sp_AAAA', effective_at: '2025-12-18 10:05:00.000', change_type: 'merged', first_seen_event_id: 'evt-010', first_seen_app_id: 'web'}
+        # B→C at t2 (direct merge)
+        - {snowplow_id: 'sp_CCCC', previous_snowplow_id: 'sp_BBBB', effective_at: '2025-12-18 10:10:00.000', change_type: 'merged', first_seen_event_id: 'evt-020', first_seen_app_id: 'web'}
+
+  # Future-proofing against engine TTL: A merged too long ago and is no
+  # longer in the cumulative payload. Only B appears in this run's event.
+  # The pre-run snapshot still has A→B, so the orphan_cascades path must
+  # emit A→C@t2 (and B→C@t2 from the event).
+  - name: test__snowplow_identities_id_changes_this_run__ttl_orphan_rescue
+    description: >
+      B→C event in this batch with A dropped from cumulative. Snapshot has
+      {A→B}. Emits A→C@t2 (orphan cascade) and B→C@t2 (direct).
+    model: snowplow_identities_id_changes_this_run
+    config:
+      tags: ["snowflake_only"]
+    overrides:
+      macros:
+        is_incremental: true
+    given:
+      - input: ref('snowplow_identities_new_identities_this_run')
+        rows: []
+      - input: ref('snowplow_identities_new_identities')
+        rows:
+          - {snowplow_id: 'sp_AAAA', created_at: '2025-12-18 10:00:00.500', first_seen_event_id: 'evt-001', first_app_id: 'web', last_app_id: 'web', domain_userid: 'user-aaa', user_id: null, first_derived_tstamp: '2025-12-18 10:00:00.000', last_derived_tstamp: '2025-12-18 10:00:10.000'}
+          - {snowplow_id: 'sp_BBBB', created_at: '2025-12-18 10:01:00.500', first_seen_event_id: 'evt-002', first_app_id: 'web', last_app_id: 'web', domain_userid: 'user-bbb', user_id: null, first_derived_tstamp: '2025-12-18 10:01:00.000', last_derived_tstamp: '2025-12-18 10:01:10.000'}
+      - input: ref('snowplow_identities_merge_events_this_run')
+        format: sql
+        rows: |
+          select
+            'evt-020' as merge_event_id,
+            'sp_CCCC' as active_snowplow_id,
+            parse_json('[{"snowplow_id":"sp_BBBB","created_at":"2025-12-18T10:01:00.500Z","merged_at":"2025-12-18T10:10:00.000Z","triggering_event_id":"evt-020"}]') as merged,
+            parse_json('["sp_BBBB"]') as merges,
+            '2025-12-18 10:10:00.100'::timestamp as collector_tstamp,
+            '2025-12-18 10:10:00.000'::timestamp as derived_tstamp
+      - input: ref('snowplow_identities_snowplow_id_mapping_this_run')
+        rows:
+          - {snowplow_id: 'sp_BBBB', active_snowplow_id: 'sp_CCCC', merged_at: '2025-12-18 10:10:00.000', model_tstamp: '2025-12-18 10:15:00.000'}
+      - input: source('snowplow_identities_internal', 'snowplow_id_mapping_affected')
+        format: sql
+        rows: |
+          select
+            'sp_AAAA'::varchar as snowplow_id,
+            'sp_BBBB'::varchar as active_snowplow_id,
+            '2025-12-18 10:05:00.000'::timestamp as merged_at,
+            '2025-12-18 10:08:00.000'::timestamp as model_tstamp
+    expect:
+      rows:
+        - {snowplow_id: 'sp_CCCC', previous_snowplow_id: 'sp_AAAA', effective_at: '2025-12-18 10:10:00.000', change_type: 'merged', first_seen_event_id: 'evt-020', first_seen_app_id: 'web'}
+        - {snowplow_id: 'sp_CCCC', previous_snowplow_id: 'sp_BBBB', effective_at: '2025-12-18 10:10:00.000', change_type: 'merged', first_seen_event_id: 'evt-020', first_seen_app_id: 'web'}
