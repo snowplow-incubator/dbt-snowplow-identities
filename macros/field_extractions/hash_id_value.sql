@@ -30,7 +30,6 @@ You may obtain a copy of the Snowplow Personal and Academic License Version 1.0 
   sha2(lower(trim({{ column_expression }})), 256)
 {% endmacro %}
 
-{# Databricks dispatches to spark__ via the dbt-databricks → dbt-spark adapter chain. #}
 {% macro spark__hash_id_value(column_expression) %}
   sha2(lower(trim({{ column_expression }})), 256)
 {% endmacro %}

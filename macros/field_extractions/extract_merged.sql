@@ -38,9 +38,6 @@ You may obtain a copy of the Snowplow Personal and Academic License Version 1.0 
     group by 1, 2, 3
 {% endmacro %}
 
-{# Databricks dispatches to spark__ via the dbt-databricks → dbt-spark adapter chain.
-   `merged` is an array<struct<...>>; LATERAL VIEW explode preserves the struct
-   so sub-fields are accessed with dot syntax, matching the BigQuery shape. #}
 {% macro spark__extract_merged() %}
     select
         p.active_snowplow_id,

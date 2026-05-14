@@ -32,7 +32,6 @@ You may obtain a copy of the Snowplow Personal and Academic License Version 1.0 
 
 {% endmacro %}
 
-{# Databricks dispatches to spark__ via the dbt-databricks → dbt-spark adapter chain. #}
 {% macro spark__get_identity_fields() %}
 
     {{ snowplow_utils.get_field('contexts_com_snowplowanalytics_snowplow_identity_2', 'snowplow_id', table_alias=none, type='string', array_index=0) }} as snowplow_id,
