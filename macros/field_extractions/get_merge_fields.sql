@@ -33,3 +33,14 @@ You may obtain a copy of the Snowplow Personal and Academic License Version 1.0 
     , unstruct_event_com_snowplowanalytics_snowplow_identity_merge_2:merges::array AS merges
 
 {% endmacro %}
+
+{# Databricks dispatches to spark__ via the dbt-databricks → dbt-spark adapter chain.
+   The unstruct column is loaded as a struct so the array sub-fields are
+   projected directly and stay typed (array<struct<...>> / array<string>). #}
+{% macro spark__get_merge_fields() %}
+
+    , {{ snowplow_utils.get_field('unstruct_event_com_snowplowanalytics_snowplow_identity_merge_2', 'snowplow_id', table_alias=none, type='string') }} as active_snowplow_id
+    , unstruct_event_com_snowplowanalytics_snowplow_identity_merge_2.merged as merged
+    , unstruct_event_com_snowplowanalytics_snowplow_identity_merge_2.merges as merges
+
+{% endmacro %}
