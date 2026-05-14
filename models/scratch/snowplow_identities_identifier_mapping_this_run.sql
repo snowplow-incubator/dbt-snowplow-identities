@@ -17,7 +17,7 @@ with new_identifiers as (
         snowplow_id,
         id_type,
         {% if var('snowplow__hash_identifiers', false) %}
-            to_hex(sha256(lower(trim(id_value)))) as id_value,
+            {{ snowplow_identities.hash_id_value('id_value') }} as id_value,
         {% else %}
             id_value,
         {% endif %}
