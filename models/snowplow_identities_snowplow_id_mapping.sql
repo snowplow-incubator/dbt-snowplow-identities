@@ -22,9 +22,7 @@ You may obtain a copy of the Snowplow Personal and Academic License Version 1.0 
     },
     pre_hook=[
       "{% if is_incremental() %}
-         CREATE OR REPLACE TABLE {{ this.schema }}.{{ this.identifier }}_affected
-         {% if target.type in ['databricks', 'spark'] %}USING DELTA{% endif %}
-         AS
+         CREATE OR REPLACE TABLE {{ this.schema }}.{{ this.identifier }}_affected AS
          SELECT m.snowplow_id, m.active_snowplow_id, m.merged_at, m.model_tstamp
          FROM {{ this }} m
          WHERE m.active_snowplow_id IN (
@@ -37,7 +35,6 @@ You may obtain a copy of the Snowplow Personal and Academic License Version 1.0 
              merged_at TIMESTAMP,
              model_tstamp TIMESTAMP
          )
-         {% if target.type in ['databricks', 'spark'] %}USING DELTA{% endif %}
        {% endif %}"
     ],
     meta={'upsert_date_key': 'merged_at', 'snowplow_optimize': true}
