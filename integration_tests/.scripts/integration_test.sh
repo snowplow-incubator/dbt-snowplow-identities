@@ -10,7 +10,7 @@ do
   esac
 done
 
-declare -a SUPPORTED_DATABASES=("bigquery" "snowflake")
+declare -a SUPPORTED_DATABASES=("bigquery" "snowflake" "databricks")
 
 # set to lower case
 DATABASE="$(echo $DATABASE | tr '[:upper:]' '[:lower:]')"
@@ -36,7 +36,7 @@ for db in ${DATABASES[@]}; do
   done
 
   echo "snowplow-identities integration tests: Test models"
-  if [[ $db == "bigquery" ]]; then
+  if [[ $db == "bigquery" || $db == "databricks" || $db == "spark" ]]; then
     eval "dbt test --exclude tag:snowflake_only --target $db" || exit 1;
   else
     eval "dbt test --target $db" || exit 1;

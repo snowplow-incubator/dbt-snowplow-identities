@@ -63,6 +63,35 @@ from {{ ref('snowplow_identities_events') }}
 
 {% endmacro %}
 
+{% macro databricks__create_events_stg() %}
+
+select
+    event_id,
+    event_name,
+    app_id,
+    domain_userid,
+    user_id,
+    network_userid,
+    collector_tstamp,
+    derived_tstamp,
+    dvce_created_tstamp,
+    load_tstamp,
+    from_json(
+        contexts_com_snowplowanalytics_snowplow_identity_2,
+        'array<struct<snowplow_id:string,created_at:timestamp>>'
+    ) as contexts_com_snowplowanalytics_snowplow_identity_2,
+    from_json(
+        unstruct_event_com_snowplowanalytics_snowplow_identity_merge_2,
+        'struct<snowplow_id:string,merged:array<struct<snowplow_id:string,created_at:timestamp,merged_at:timestamp,triggering_event_id:string>>,merges:array<string>>'
+    ) as unstruct_event_com_snowplowanalytics_snowplow_identity_merge_2
+from {{ ref('snowplow_identities_events') }}
+
+{% endmacro %}
+
+{% macro spark__create_events_stg() %}
+    {{ return(snowplow_identities_integration_tests.databricks__create_events_stg()) }}
+{% endmacro %}
+
 {% macro create_events_stg() %}
     {{ return(adapter.dispatch('create_events_stg', 'snowplow_identities_integration_tests')()) }}
 {% endmacro %}

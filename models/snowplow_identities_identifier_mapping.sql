@@ -141,13 +141,22 @@ with new_from_this_run as (
     where rn = 1
 )
 
-select * from new_aggregated
-union all
-select * from existing_to_repoint
+, unioned as (
+    select * from new_aggregated
+    union all
+    select * from existing_to_repoint
+)
+
+select
+    *
+    {{ snowplow_identities.databricks_partition_date('last_seen_at') }}
+from unioned
 
 {% else %}
 
-select *
+select
+    *
+    {{ snowplow_identities.databricks_partition_date('last_seen_at') }}
 from new_from_this_run
 
 {% endif %}

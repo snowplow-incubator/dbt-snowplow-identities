@@ -25,13 +25,15 @@ You may obtain a copy of the Snowplow Personal and Academic License Version 1.0 
 
 {% if not is_incremental() %}
 
-  select *
+  select
+      *
+      {{ snowplow_identities.databricks_partition_date('effective_at') }}
   from {{ ref('snowplow_identities_id_changes_this_run') }}
   where {{ snowplow_utils.is_run_with_new_events('snowplow_identities') }}
-  
+
 {% else %}
 
-select 
+select
 
     i.id_change_key,
     i.snowplow_id,
@@ -44,6 +46,7 @@ select
       else t.first_seen_event_id end as first_seen_event_id,
     case when t.effective_at is null or i.effective_at < t.effective_at then i.first_seen_app_id
       else t.first_seen_app_id end as first_seen_app_id
+    {{ snowplow_identities.databricks_partition_date('least(i.effective_at, coalesce(t.effective_at, i.effective_at))', alias='effective_at') }}
 
 from {{ ref('snowplow_identities_id_changes_this_run') }} i
 left join {{ this }} t
