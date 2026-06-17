@@ -19,7 +19,7 @@ with events as (
     select
         {{ snowplow_identities.get_identity_fields() }}
         {% for identifier in identifiers %}
-        cast({{ identifier.reference }} as string) as {{ identifier.alias }},
+        cast({{ identifier.reference }} as {{ dbt.type_string() }}) as {{ identifier.alias }},
         {% endfor %}
         event_id,
         app_id,
