@@ -1,3 +1,34 @@
+snowplow-identities 0.2.0 (2026-YY-ZZ)
+---------------------------------------
+See MIGRATION.md for upgrade steps and rebuild recipes for the removed tables.
+
+Breaking changes
+- `snowplow_identities_id_changes` removed. Rebuild recipe in MIGRATION.md.
+- `snowplow_identities_id_mapping_scd` removed. Rebuild recipe in MIGRATION.md.
+- `snowplow_identities_new_identities` renamed to `snowplow_identities_identities`,
+  and its per-identifier columns (domain_userid, user_id, ...) removed. Those values
+  live in `snowplow_identities_identifier_mapping` at the identifier grain, which keeps
+  every value an identity has carried instead of collapsing to one per type.
+
+Changed
+- `snowplow_identities_identifier_mapping` is now a view over the new
+  `snowplow_identities_identifier_mapping_base` table, resolving each row to its current
+  `active_snowplow_id` at read time. Columns, grain and values are unchanged, so
+  consumers need no changes.
+
+Fixed
+- Merges no longer rewrite, re-point or delete identifier rows. `identifier_mapping_base`
+  is keyed on an immutable surrogate of (snowplow_id, id_type, id_value), which makes the
+  recurring re-pointing failures unrepresentable: stale rows after cascading merges,
+  duplicate keys for shared identifiers, and the duplicate-uuid MERGE error.
+- An identifier that expires from the identity engine and later reappears under a new
+  identity now keeps both rows rather than overwriting the first.
+
+Removed
+- The `snowplow_identities_snowplow_id_mapping_affected` pre-hook snapshot table and the
+  `snowplow_identities_internal` source that read it without a DAG edge.
+- The `delete_stale_identifier_mapping_rows` macro and its post-hook.
+
 snowplow-identities 0.1.0 (2026-YY-ZZ)
 ---------------------------------------
 Initial commit of package
