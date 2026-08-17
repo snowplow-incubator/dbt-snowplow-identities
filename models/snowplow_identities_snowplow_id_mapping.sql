@@ -20,23 +20,6 @@ You may obtain a copy of the Snowplow Personal and Academic License Version 1.0 
       'delta.autoOptimize.optimizeWrite' : 'true',
       'delta.autoOptimize.autoCompact' : 'true'
     },
-    pre_hook=[
-      "{% if is_incremental() %}
-         CREATE OR REPLACE TABLE {{ this.schema }}.{{ this.identifier }}_affected AS
-         SELECT m.snowplow_id, m.active_snowplow_id, m.merged_at, m.model_tstamp
-         FROM {{ this }} m
-         WHERE m.active_snowplow_id IN (
-             SELECT snowplow_id FROM {{ ref('snowplow_identities_snowplow_id_mapping_this_run') }}
-         )
-       {% else %}
-         CREATE OR REPLACE TABLE {{ this.schema }}.{{ this.identifier }}_affected (
-             snowplow_id STRING,
-             active_snowplow_id STRING,
-             merged_at TIMESTAMP,
-             model_tstamp TIMESTAMP
-         )
-       {% endif %}"
-    ],
     meta={'upsert_date_key': 'merged_at', 'snowplow_optimize': true}
 ) }}
 

@@ -25,10 +25,6 @@ Incremental table containing all merge events.
 The staging table that identifies new identities based on incoming Snowplow events
 {% enddocs %}
 
-{% docs table_id_changes_this_run %}
-A staging table that contains all changes to snowplow ID clusters, including both merges and when new ids are created in a given run.
-{% enddocs %}
-
 {% docs table_identifier_mapping_this_run %}
 A staging table processing all identifiers belonging to an active snowplow_id.
 {% enddocs %}
@@ -45,10 +41,6 @@ A staging table containing first and last observed activity in a given run for a
 This provides a simplified mapping between any previous snowplow_id and its current active_snowplow_id. It automatically handles chains of merges so you always get the most current unified ID. 
 {% enddocs %}
 
-{% docs table_id_changes %}
-A fact table that contains a complete history of all changes to snowplow ID clusters, including both merges and when new IDs are created.
-{% enddocs %}
-
 {% docs table_identifier_mapping %}
 Contains all identifiers currently linked to an `active_snowplow_id`. The list of `identifier_types` is configurable, which is why we leave it normalized with `identifier_type` and `identifier_value` as columns instead of pivoting it out into a wide table with the identifier_types as different columns.
 
@@ -62,19 +54,4 @@ Optionally, id_values can be the hashed version of the identifier instead of the
 Incremental table containing first and last observed activity for a given Snowplow identifier.
 {% enddocs %}
 
-{% docs table_id_mapping_scd %}
-SCD Type 2 table for identity mappings with event-time semantics.
-
-This table provides point-in-time reproducible queries for identity resolution. This table uses event time (`effective_at`) to track when mappings actually occurred.
-
-**Point-in-Time Query Pattern:**
-```sql
-SELECT s.snowplow_id, scd.active_snowplow_id
-FROM sessions s
-JOIN snowplow_identities_id_mapping_scd scd
-  ON s.snowplow_id = scd.snowplow_id
-WHERE scd.effective_at <= @query_timestamp
-  AND (scd.superseded_at IS NULL OR scd.superseded_at > @query_timestamp)
-```
-{% enddocs %}
 
