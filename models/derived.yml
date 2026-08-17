@@ -1,6 +1,32 @@
 version: 2
 
 models:
+  - name: snowplow_identities_identifier_mapping_base
+    description: '{{ doc("table_identifier_mapping_base") }}'
+    columns:
+      - name: id_key
+        description: 'Immutable surrogate key based on (snowplow_id, id_type, id_value). Never changes, so merges never rewrite a row. Not the same as the view''s uuid, which is keyed on active_snowplow_id.'
+        tests:
+          - not_null
+          - unique
+      - name: snowplow_id
+        description: 'The identity that carried this identifier at event time. May since have been merged; resolve through snowplow_id_mapping (or query the identifier_mapping view) for the current parent.'
+        tests:
+          - not_null
+      - name: id_type
+        description: 'The type of identifier (e.g., "email", "user_id", "domain_userid") associated with the snowplow_id.'
+      - name: id_value
+        description: 'The actual (or hashed) identifier value.'
+      - name: first_app_id
+        description: 'The app_id of the event where this id was first observed under this snowplow_id.'
+      - name: last_app_id
+        description: 'The app_id of the event where this id was most recently observed under this snowplow_id.'
+      - name: first_seen_at
+        description: 'The derived_tstamp of the first event contributing this identifier under this snowplow_id.'
+      - name: last_seen_at
+        description: 'The derived_tstamp of the last event contributing this identifier under this snowplow_id.'
+      - name: first_seen_event_id
+        description: 'The first event that contributed this identifier under this snowplow_id.'
   - name: snowplow_identities_identifier_mapping
     description: '{{ doc("table_identifier_mapping") }}'
     columns:
@@ -8,6 +34,7 @@ models:
         description: 'Surrogate key for the identifier mapping record, based on (active_snowplow_id, id_type, id_value). Unique per resolved identity and identifier combination.'
         tests:
           - not_null
+          - unique
       - name: active_snowplow_id
         description: 'The current, canonical Snowplow ID after considering all merges .'
         tests:

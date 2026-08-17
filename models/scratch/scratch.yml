@@ -26,13 +26,13 @@ models:
   - name: snowplow_identities_identifier_mapping_this_run
     description: '{{ doc("table_identifier_mapping_this_run") }}'
     columns:
-      - name: uuid
-        description: 'A unique identifier for the mapping record.'
+      - name: id_key
+        description: 'Immutable surrogate key based on (snowplow_id, id_type, id_value).'
         tests:
           - not_null
           - unique
-      - name: active_snowplow_id
-        description: 'The current, canonical Snowplow ID after considering all merges in the current run.'
+      - name: snowplow_id
+        description: 'The identity that carried this identifier at event time. Not resolved to the active parent -- that happens at read time in the identifier_mapping view.'
         tests:
           - not_null
       - name: id_type

@@ -1,0 +1,72 @@
+version: 2
+
+unit_tests:
+
+  - name: test__snowplow_identities_identifier_mapping_base__preserve_first_seen_at
+    description: >
+      A user visits on Monday (first_seen_at=Monday, last_seen_at=Monday). The same
+      identifier appears again on Wednesday in a new batch, under the same snowplow_id
+      so the same id_key. The stored row must keep first_seen_at=Monday and advance
+      last_seen_at to Wednesday, keeping first_app_id and first_seen_event_id from
+      Monday and last_app_id from Wednesday.
+    model: snowplow_identities_identifier_mapping_base
+    config:
+      tags: ["snowflake_only"]
+    overrides:
+      macros:
+        is_incremental: true
+        snowplow_utils.is_run_with_new_events: true
+    given:
+      - input: ref('snowplow_identities_identifier_mapping_this_run')
+        rows:
+          - {id_key: 'k_aaa', snowplow_id: 'sp_AAAA', id_type: 'DOMAIN_USERID', id_value: 'user-aaa', first_app_id: 'mobile', last_app_id: 'mobile', first_seen_at: '2025-12-17 10:00:00.000', last_seen_at: '2025-12-17 10:00:10.000', first_seen_event_id: 'evt-wed'}
+      - input: this
+        rows:
+          - {id_key: 'k_aaa', snowplow_id: 'sp_AAAA', id_type: 'DOMAIN_USERID', id_value: 'user-aaa', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2025-12-15 10:00:00.000', last_seen_at: '2025-12-15 10:00:10.000', first_seen_event_id: 'evt-mon'}
+    expect:
+      rows:
+        - {id_key: 'k_aaa', snowplow_id: 'sp_AAAA', id_type: 'DOMAIN_USERID', id_value: 'user-aaa', first_app_id: 'web', last_app_id: 'mobile', first_seen_at: '2025-12-15 10:00:00.000', last_seen_at: '2025-12-17 10:00:10.000', first_seen_event_id: 'evt-mon'}
+
+  - name: test__snowplow_identities_identifier_mapping_base__late_arriving_earlier_event
+    description: >
+      A batch delivers an event that is earlier than what is already stored. The fold
+      must pull first_seen_at, first_app_id and first_seen_event_id back to the newly
+      arrived earlier values while leaving last_seen_at alone.
+    model: snowplow_identities_identifier_mapping_base
+    config:
+      tags: ["snowflake_only"]
+    overrides:
+      macros:
+        is_incremental: true
+        snowplow_utils.is_run_with_new_events: true
+    given:
+      - input: ref('snowplow_identities_identifier_mapping_this_run')
+        rows:
+          - {id_key: 'k_aaa', snowplow_id: 'sp_AAAA', id_type: 'DOMAIN_USERID', id_value: 'user-aaa', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2025-12-10 08:00:00.000', last_seen_at: '2025-12-10 08:00:00.000', first_seen_event_id: 'evt-late'}
+      - input: this
+        rows:
+          - {id_key: 'k_aaa', snowplow_id: 'sp_AAAA', id_type: 'DOMAIN_USERID', id_value: 'user-aaa', first_app_id: 'mobile', last_app_id: 'mobile', first_seen_at: '2025-12-15 10:00:00.000', last_seen_at: '2025-12-15 10:00:10.000', first_seen_event_id: 'evt-mon'}
+    expect:
+      rows:
+        - {id_key: 'k_aaa', snowplow_id: 'sp_AAAA', id_type: 'DOMAIN_USERID', id_value: 'user-aaa', first_app_id: 'web', last_app_id: 'mobile', first_seen_at: '2025-12-10 08:00:00.000', last_seen_at: '2025-12-15 10:00:10.000', first_seen_event_id: 'evt-late'}
+
+  - name: test__snowplow_identities_identifier_mapping_base__new_identifier_no_history
+    description: >
+      An identifier with no stored row is inserted as-is. Guards the left join's
+      coalesce fallbacks against nulling out the seen-at window on first sight.
+    model: snowplow_identities_identifier_mapping_base
+    config:
+      tags: ["snowflake_only"]
+    overrides:
+      macros:
+        is_incremental: true
+        snowplow_utils.is_run_with_new_events: true
+    given:
+      - input: ref('snowplow_identities_identifier_mapping_this_run')
+        rows:
+          - {id_key: 'k_new', snowplow_id: 'sp_NEW', id_type: 'USER_ID', id_value: 'jane@example.com', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2025-12-18 10:00:00.000', last_seen_at: '2025-12-18 10:00:10.000', first_seen_event_id: 'evt-new'}
+      - input: this
+        rows: []
+    expect:
+      rows:
+        - {id_key: 'k_new', snowplow_id: 'sp_NEW', id_type: 'USER_ID', id_value: 'jane@example.com', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2025-12-18 10:00:00.000', last_seen_at: '2025-12-18 10:00:10.000', first_seen_event_id: 'evt-new'}
