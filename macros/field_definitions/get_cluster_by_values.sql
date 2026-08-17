@@ -13,7 +13,7 @@ You may obtain a copy of the Snowplow Personal and Academic License Version 1.0 
 {% macro default__get_cluster_by_values(model) %}
     {% if model == 'merge_events' %}
         {{ return(snowplow_utils.get_value_by_target_type(bigquery_val=["active_snowplow_id"], snowflake_val=["active_snowplow_id"])) }}
-    {% elif model == 'new_identities' %}
+    {% elif model == 'identities' %}
         {{ return(snowplow_utils.get_value_by_target_type(bigquery_val=["snowplow_id"], snowflake_val=["snowplow_id"])) }}
     {% elif model == 'identifier_mapping_base' %}
         {{ return(snowplow_utils.get_value_by_target_type(bigquery_val=["snowplow_id", "id_key"], snowflake_val=["snowplow_id", "id_key"])) }}

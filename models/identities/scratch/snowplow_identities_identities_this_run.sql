@@ -5,6 +5,13 @@ and you may not use this file except in compliance with the Snowplow Personal an
 You may obtain a copy of the Snowplow Personal and Academic License Version 1.0 at https://docs.snowplow.io/personal-and-academic-license-1.0/
 #}
 
+{#
+  One row per snowplow_id seen this run: when the identity was created, and where it was
+  first and last seen. Per-identifier columns are deliberately absent -- they live in
+  snowplow_identities_identifier_mapping at the identifier grain, where they are complete
+  and always current rather than collapsed to one value per identity.
+#}
+
 with prep as (
     select
         -- Extract identity fields directly from the event using the macro
@@ -14,7 +21,7 @@ with prep as (
         derived_tstamp,
         collector_tstamp
     from {{ ref('snowplow_identities_base_events_this_run') }}
-    where 
+    where
     {% if target.type == 'bigquery' %}
         {{ snowplow_utils.get_optional_fields(
             enabled=true,
@@ -48,39 +55,13 @@ with prep as (
     ) = 1
 )
 
-, earliest_per_type as (
-    select
-        snowplow_id,
-        id_type,
-        id_value
-    from {{ ref('snowplow_identities_new_identifiers_this_run') }}
-    qualify row_number() over (
-        partition by snowplow_id, id_type
-        order by first_derived_tstamp asc, first_seen_event_id asc
-    ) = 1
-)
-
-, aggregated_values as (
-    select
-        snowplow_id,
-        {% for identifier in var('snowplow__identifiers', [{'reference': 'domain_userid', 'alias': 'domain_userid'}, {'reference': 'user_id', 'alias': 'user_id'}]) %}
-            max(case when upper(id_type) = upper('{{ identifier.alias }}') then id_value end) as {{ identifier.alias }}{% if not loop.last %},{% endif %}
-        {% endfor %}
-    from earliest_per_type
-    group by snowplow_id
-)
-
 select
     f.snowplow_id,
     f.created_at,
     f.event_id as first_seen_event_id,
     f.app_id as first_app_id,
     l.app_id as last_app_id,
-    {% for identifier in var('snowplow__identifiers', [{'reference': 'domain_userid', 'alias': 'domain_userid'}, {'reference': 'user_id', 'alias': 'user_id'}]) %}
-    a.{{ identifier.alias }},
-    {% endfor %}
     f.derived_tstamp as first_derived_tstamp,
     l.derived_tstamp as last_derived_tstamp
 from first_event f
 left join last_event l using (snowplow_id)
-left join aggregated_values a using (snowplow_id)

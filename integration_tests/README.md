@@ -73,5 +73,5 @@ After all 4 runs, these derived tables are compared against expected seeds:
 
 - `snowplow_identities_snowplow_id_mapping`
 - `snowplow_identities_identifier_mapping`
-- `snowplow_identities_new_identities`
+- `snowplow_identities_identities`
 - `snowplow_identities_merge_events`

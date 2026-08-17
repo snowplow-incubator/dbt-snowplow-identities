@@ -5,6 +5,16 @@ and you may not use this file except in compliance with the Snowplow Personal an
 You may obtain a copy of the Snowplow Personal and Academic License Version 1.0 at https://docs.snowplow.io/personal-and-academic-license-1.0/
 #}
 
+{#
+  One row per snowplow_id: when the identity was created and where it was first and last
+  seen. snowplow_id is the identity at event time -- it may since have been merged, so
+  resolve through snowplow_id_mapping if you need the current parent.
+
+  Per-identifier columns (domain_userid, user_id, ...) are not here. They live in
+  snowplow_identities_identifier_mapping, one row per identifier value, which keeps every
+  value an identity has carried rather than one arbitrary value per identity.
+#}
+
 {{ config(
     materialized="incremental",
     on_schema_change="append_new_columns",
@@ -14,7 +24,7 @@ You may obtain a copy of the Snowplow Personal and Academic License Version 1.0 
       "field": "first_derived_tstamp",
       "data_type": "timestamp"
     }, databricks_val='first_derived_tstamp_date'),
-    cluster_by=snowplow_identities.get_cluster_by_values('new_identities'),
+    cluster_by=snowplow_identities.get_cluster_by_values('identities'),
     tags=["derived"],
     tblproperties={
       'delta.autoOptimize.optimizeWrite' : 'true',
@@ -27,7 +37,7 @@ You may obtain a copy of the Snowplow Personal and Academic License Version 1.0 
 
 with new_data as (
     select *
-    from {{ ref('snowplow_identities_new_identities_this_run') }}
+    from {{ ref('snowplow_identities_identities_this_run') }}
     where {{ snowplow_utils.is_run_with_new_events('snowplow_identities') }}
 ),
 
@@ -40,9 +50,6 @@ merged as (
         t.first_seen_event_id as prev_first_seen_event_id,
         t.first_app_id as prev_first_app_id,
         t.last_app_id as prev_last_app_id,
-        {% for identifier in var('snowplow__identifiers', [{'reference': 'domain_userid', 'alias': 'domain_userid'}, {'reference': 'user_id', 'alias': 'user_id'}]) %}
-        t.{{ identifier.alias }} as prev_{{ identifier.alias }},
-        {% endfor %}
         t.first_derived_tstamp as prev_first_derived_tstamp,
         t.last_derived_tstamp as prev_last_derived_tstamp
     from new_data n
@@ -55,9 +62,6 @@ select
     case when old_is_earlier then prev_first_seen_event_id else first_seen_event_id end as first_seen_event_id,
     case when old_is_earlier then prev_first_app_id else first_app_id end as first_app_id,
     case when old_is_later then prev_last_app_id else last_app_id end as last_app_id,
-    {% for identifier in var('snowplow__identifiers', [{'reference': 'domain_userid', 'alias': 'domain_userid'}, {'reference': 'user_id', 'alias': 'user_id'}]) %}
-    coalesce({{ identifier.alias }}, prev_{{ identifier.alias }}) as {{ identifier.alias }},
-    {% endfor %}
     case when old_is_earlier then prev_first_derived_tstamp else first_derived_tstamp end as first_derived_tstamp,
     case when old_is_later then prev_last_derived_tstamp else last_derived_tstamp end as last_derived_tstamp
 from merged
@@ -65,7 +69,7 @@ from merged
 {% else %}
 
 select *
-from {{ ref('snowplow_identities_new_identities_this_run') }}
+from {{ ref('snowplow_identities_identities_this_run') }}
 where {{ snowplow_utils.is_run_with_new_events('snowplow_identities') }}
 
 {% endif %}

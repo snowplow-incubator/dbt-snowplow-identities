@@ -26,15 +26,21 @@ The staging table that identifies new identities based on incoming Snowplow even
 {% enddocs %}
 
 {% docs table_identifier_mapping_this_run %}
-A staging table processing all identifiers belonging to an active snowplow_id.
+A staging table of this run's identifiers at their event-time grain: one row per (snowplow_id, id_type, id_value). Deliberately unresolved -- mapping to the active parent happens at read time in `snowplow_identities_identifier_mapping`.
+{% enddocs %}
+
+{% docs table_identifier_mapping_base %}
+The durable store behind `snowplow_identities_identifier_mapping`. One row per (snowplow_id, id_type, id_value), keyed on an immutable surrogate (`id_key`) so that merges never rewrite, re-point, or delete a row. The only update a row receives is a widening of its `first_seen_at` / `last_seen_at` window when the same identifier is seen again under the same `snowplow_id`.
+
+Query `snowplow_identities_identifier_mapping` instead of this table unless you specifically want the raw event-time record — the view resolves each row to its current `active_snowplow_id`.
 {% enddocs %}
 
 {% docs table_merge_events_this_run %}
 A staging table containing merge events processed in a given run.
 {% enddocs %}
 
-{% docs table_new_identities_this_run %}
-A staging table containing first and last observed activity in a given run for a Snowplow identifier.
+{% docs table_identities_this_run %}
+A staging table containing first and last observed activity in a given run for a Snowplow identity.
 {% enddocs %}
 
 {% docs table_snowplow_id_mapping %}
@@ -47,11 +53,17 @@ Contains all identifiers currently linked to an `active_snowplow_id`. The list o
 This table is useful if you want to perform a lookup of addressable IDs (like email) that can be activated to downstream systems.
 
 Optionally, id_values can be the hashed version of the identifier instead of the raw PII. This can be done by setting var('snowplow__hash_identifiers') to true.
+
+Materialized as a view over `snowplow_identities_identifier_mapping_base`, resolving each immutable row to its current `active_snowplow_id` at read time. Columns and grain are unchanged from previous versions, when this was an incremental table, so no consumer changes are needed. Because resolution happens on read, a merge is reflected the moment `snowplow_id_mapping` updates, with no rows rewritten upstream.
 {% enddocs %}
 
 
-{% docs table_new_identities %}
-Incremental table containing first and last observed activity for a given Snowplow identifier.
+{% docs table_identities %}
+Incremental table containing one row per Snowplow identity: when it was created, and the first and last activity observed for it.
+
+`snowplow_id` here is the identity as it existed at event time and may since have been merged — join `snowplow_identities_snowplow_id_mapping` to resolve it to the current `active_snowplow_id`.
+
+Per-identifier columns are not on this table. They live in `snowplow_identities_identifier_mapping` at the identifier grain, which retains every value an identity has carried instead of collapsing to one value per identity per type.
 {% enddocs %}
 
 

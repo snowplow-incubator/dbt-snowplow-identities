@@ -41,7 +41,7 @@ models:
       scratch:
         +schema: "scratch"
         +tags: "scratch"
-    new_identities:
+    identities:
       +schema: "derived"
       +tags: "snowplow_identities_incremental"
       scratch:

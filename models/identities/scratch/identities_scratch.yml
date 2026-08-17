@@ -1,11 +1,11 @@
 version: 2
 
 models:
-  - name: snowplow_identities_new_identities_this_run
-    description: '{{ doc("table_new_identities_this_run") }}'
+  - name: snowplow_identities_identities_this_run
+    description: '{{ doc("table_identities_this_run") }}'
     columns:
       - name: snowplow_id
-        description: 'The active snowplow_id associated with the incoming event. It may have already been merged since then.'
+        description: 'The snowplow_id as seen at event time. It may have been merged since; resolve through snowplow_id_mapping for the current parent.'
         tests:
           - not_null
           - unique
@@ -13,12 +13,8 @@ models:
         description: 'The identity creation timestamp of the given snowplow_id taken from the identity context.'
       - name: first_seen_event_id
         description: 'The event_id of the first event belonging to a snowplow_id in a given run.'
-      - name: domain_userid
-        description: 'The domain_userid from the first event associated with this snowplow_id in the current run. Optional, dictated by var("snowplow__identifiers").'
-      - name: user_id
-        description: 'The user_id from the first event associated with this snowplow_id in the current run. Optional, dictated by var("snowplow__identifiers").'
       - name: first_app_id
-        description: 'The app_id from the first event associated with this snowplow_id.'
+        description: 'The app_id from the first event associated with this snowplow_id in the current run.'
       - name: last_app_id
         description: 'The app_id from the last event associated with this snowplow_id in the current run.'
       - name: first_derived_tstamp
