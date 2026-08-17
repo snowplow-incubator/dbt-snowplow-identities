@@ -1,41 +1,110 @@
 version: 2
 
+# These now drive off merge_events rather than the deleted _this_run scratch model, so the
+# fixtures carry the raw cumulative `merged` arrays and the true_parents / dedupe logic is
+# exercised for real instead of being pre-resolved by an upstream model.
+#
+# Each test overrides snowplow__start_date and snowplow__backfill_limit_days so the
+# self-watermarking filter's window covers the fixture rows regardless of project vars.
+# model_tstamp is omitted from expectations: it comes from current_timestamp_in_utc().
+
 unit_tests:
 
   - name: test__snowplow_identities_snowplow_id_mapping__first_run
     description: >
-      First run: sp_BBBB is merged into sp_AAAA. The table should
-      contain the mapping.
+      First run: sp_BBBB is merged into sp_AAAA. The table should contain the mapping.
     model: snowplow_identities_snowplow_id_mapping
+    config:
+      tags: ["snowflake_only"]
     overrides:
       macros:
         is_incremental: false
-        snowplow_utils.is_run_with_new_events: "true"
+      vars:
+        snowplow__start_date: '2025-12-01'
+        snowplow__backfill_limit_days: 90
     given:
-      - input: ref('snowplow_identities_snowplow_id_mapping_this_run')
-        rows:
-          - {snowplow_id: 'sp_BBBB', active_snowplow_id: 'sp_AAAA', merged_at: '2025-12-18 10:02:00.000', model_tstamp: '2025-12-18 10:05:00.000'}
+      - input: ref('snowplow_identities_merge_events')
+        format: sql
+        rows: |
+          select
+            'mev-001' as merge_event_id,
+            'sp_AAAA' as active_snowplow_id,
+            parse_json('[{"snowplow_id":"sp_BBBB","merged_at":"2025-12-18 10:02:00","triggering_event_id":"evt-001"}]') as merged,
+            '2025-12-18 10:02:00.000'::timestamp as collector_tstamp,
+            '2025-12-18 10:02:00.000'::timestamp as derived_tstamp,
+            '2025-12-18 11:00:00.000'::timestamp as load_tstamp
     expect:
       rows:
-        - {snowplow_id: 'sp_BBBB', active_snowplow_id: 'sp_AAAA', merged_at: '2025-12-18 10:02:00.000', model_tstamp: '2025-12-18 10:05:00.000'}
+        - {snowplow_id: 'sp_BBBB', active_snowplow_id: 'sp_AAAA', merged_at: '2025-12-18 10:02:00.000', merge_event_id: 'mev-001', triggering_event_id: 'evt-001', load_tstamp: '2025-12-18 11:00:00.000'}
+
+  - name: test__snowplow_identities_snowplow_id_mapping__cascade_resolves_to_true_parent
+    description: >
+      A cascade inside one window. mev-001 merges sp_BBBB into sp_AAAA; mev-002 then merges
+      the group into sp_CCCC and, because the arrays are cumulative, re-lists sp_BBBB too.
+      sp_AAAA is now itself a child, so the true_parents filter must drop the edge pointing
+      at it and map both sp_AAAA and sp_BBBB to sp_CCCC. Getting this wrong is what leaves
+      an intermediate parent in the table and breaks single-hop resolution.
+    model: snowplow_identities_snowplow_id_mapping
+    config:
+      tags: ["snowflake_only"]
+    overrides:
+      macros:
+        is_incremental: false
+      vars:
+        snowplow__start_date: '2025-12-01'
+        snowplow__backfill_limit_days: 90
+    given:
+      - input: ref('snowplow_identities_merge_events')
+        format: sql
+        rows: |
+          select
+            'mev-001' as merge_event_id,
+            'sp_AAAA' as active_snowplow_id,
+            parse_json('[{"snowplow_id":"sp_BBBB","merged_at":"2025-12-18 10:02:00","triggering_event_id":"evt-001"}]') as merged,
+            '2025-12-18 10:02:00.000'::timestamp as collector_tstamp,
+            '2025-12-18 10:02:00.000'::timestamp as derived_tstamp,
+            '2025-12-18 11:00:00.000'::timestamp as load_tstamp
+          union all
+          select
+            'mev-002',
+            'sp_CCCC',
+            parse_json('[{"snowplow_id":"sp_AAAA","merged_at":"2025-12-18 12:00:00","triggering_event_id":"evt-002"},{"snowplow_id":"sp_BBBB","merged_at":"2025-12-18 12:00:00","triggering_event_id":"evt-002"}]'),
+            '2025-12-18 12:00:00.000'::timestamp,
+            '2025-12-18 12:00:00.000'::timestamp,
+            '2025-12-18 13:00:00.000'::timestamp
+    expect:
+      rows:
+        - {snowplow_id: 'sp_AAAA', active_snowplow_id: 'sp_CCCC', merged_at: '2025-12-18 12:00:00.000', merge_event_id: 'mev-002', triggering_event_id: 'evt-002', load_tstamp: '2025-12-18 13:00:00.000'}
+        - {snowplow_id: 'sp_BBBB', active_snowplow_id: 'sp_CCCC', merged_at: '2025-12-18 12:00:00.000', merge_event_id: 'mev-002', triggering_event_id: 'evt-002', load_tstamp: '2025-12-18 13:00:00.000'}
 
   - name: test__snowplow_identities_snowplow_id_mapping__remapped_to_new_parent
     description: >
-      Incremental: sp_BBBB was previously mapped to sp_AAAA. A new
-      merge remaps sp_BBBB to sp_CCCC. The mapping should be updated
-      to the new parent.
+      Incremental: sp_BBBB was previously mapped to sp_AAAA. A later batch remaps it to
+      sp_CCCC. The unique_key upsert must re-point the stored row to the new parent rather
+      than leaving two mappings for one child.
     model: snowplow_identities_snowplow_id_mapping
+    config:
+      tags: ["snowflake_only"]
     overrides:
       macros:
         is_incremental: true
-        snowplow_utils.is_run_with_new_events: "true"
+      vars:
+        snowplow__start_date: '2025-12-01'
+        snowplow__backfill_limit_days: 90
     given:
-      - input: ref('snowplow_identities_snowplow_id_mapping_this_run')
-        rows:
-          - {snowplow_id: 'sp_BBBB', active_snowplow_id: 'sp_CCCC', merged_at: '2025-12-19 14:00:00.000', model_tstamp: '2025-12-19 14:05:00.000'}
+      - input: ref('snowplow_identities_merge_events')
+        format: sql
+        rows: |
+          select
+            'mev-002' as merge_event_id,
+            'sp_CCCC' as active_snowplow_id,
+            parse_json('[{"snowplow_id":"sp_BBBB","merged_at":"2025-12-19 14:00:00","triggering_event_id":"evt-002"}]') as merged,
+            '2025-12-19 14:00:00.000'::timestamp as collector_tstamp,
+            '2025-12-19 14:00:00.000'::timestamp as derived_tstamp,
+            '2025-12-19 15:00:00.000'::timestamp as load_tstamp
       - input: this
         rows:
-          - {snowplow_id: 'sp_BBBB', active_snowplow_id: 'sp_AAAA', merged_at: '2025-12-18 10:02:00.000', model_tstamp: '2025-12-18 10:05:00.000'}
+          - {snowplow_id: 'sp_BBBB', active_snowplow_id: 'sp_AAAA', merged_at: '2025-12-18 10:02:00.000', merge_event_id: 'mev-001', triggering_event_id: 'evt-001', load_tstamp: '2025-12-18 11:00:00.000', model_tstamp: '2025-12-18 11:05:00.000'}
     expect:
       rows:
-        - {snowplow_id: 'sp_BBBB', active_snowplow_id: 'sp_CCCC', merged_at: '2025-12-19 14:00:00.000', model_tstamp: '2025-12-19 14:05:00.000'}
+        - {snowplow_id: 'sp_BBBB', active_snowplow_id: 'sp_CCCC', merged_at: '2025-12-19 14:00:00.000', merge_event_id: 'mev-002', triggering_event_id: 'evt-002', load_tstamp: '2025-12-19 15:00:00.000'}

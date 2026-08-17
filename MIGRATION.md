@@ -18,50 +18,112 @@ consumers need no changes at all.**
 | `snowplow_identities_id_changes` | **Removed** | See [Rebuilding id_changes](#rebuilding-id_changes) |
 | `snowplow_identities_id_mapping_scd` | **Removed** | See [Rebuilding id_mapping_scd](#rebuilding-id_mapping_scd) |
 
-New models you will see appear, both in the `derived` schema:
+New models you will see appear:
 
-- `snowplow_identities_identifier_mapping_base` — the durable table behind the view.
-  You should not need to query it; it holds unresolved, event-time rows.
-- `snowplow_identities_identities` — the renamed `new_identities`.
+- `snowplow_identities_identifier_mapping_base` (`derived`) — the durable table behind the
+  view. You should not need to query it; it holds unresolved, event-time rows.
+- `snowplow_identities_identities` (`derived`) — the renamed `new_identities`.
+- `snowplow_identities_stg_identity_events` (`scratch`) — identity-context events read
+  straight from `atomic.events`, replacing the old base layer.
+
+Every derived table also gains a `load_tstamp` column, which is how each model now tracks
+its own progress. See [Each model now tracks its own progress](#each-model-now-tracks-its-own-progress).
+
+### Each model now tracks its own progress
+
+The shared manifest table and the hooks that maintained it are gone. Each model asks its
+own table for the newest `load_tstamp` it holds and processes forward from there, so a
+failed run leaves that model slightly behind and it catches up on the next one. This
+deletes the manifest, three supporting models, the whole `_this_run` scratch layer, and
+every run hook — 15 models becomes 5 plus a view.
+
+Config that no longer exists: `snowplow__allow_refresh`, `snowplow__dev_target_name`,
+and the `models_to_remove` var (all belonged to the manifest). A `--full-refresh` now
+simply rebuilds from `snowplow__start_date`, with no manifest to guard.
+
+Config that is new:
+
+| Var | Default | What it does |
+| --- | --- | --- |
+| `snowplow__lookback_days` | 1 | Days of overlap re-scanned each run for late-arriving data. Also the run-twice idempotency window. |
+| `snowplow__max_watermark_drift_days` | 7 | Threshold for the `snowplow_id_models_in_sync` test below. |
+| `snowplow__partition_tstamp` | `load_tstamp` | The column `atomic.events` is physically partitioned by. Set to `collector_tstamp` if that is your partition key, so staging scans still prune. |
+| `snowplow__partition_tstamp_type` | `timestamp` | `timestamp` or `date`, matching the above column's type. |
+| `snowplow__partition_buffer_days` | 2 | Extra days on the prune predicate to absorb collector-to-load lag. |
 
 ### Upgrade steps
 
 1. **Bump the package version** in your `packages.yml`.
 
-2. **Clear the manifest rows for the removed models.** On your first run, pass:
-
-   ```bash
-   dbt run --vars '{models_to_remove: [snowplow_identities_id_changes, snowplow_identities_id_mapping_scd, snowplow_identities_new_identities, snowplow_identities_new_identities_this_run]}'
-   ```
-
-   Stale rows are harmless if you skip this, but leaving them behind makes the manifest
-   misleading when you come to debug a run.
-
-3. **Expect a backfill.** `identifier_mapping_base` and `identities` are new models, so
-   the incremental framework replays from `snowplow__start_date` to populate them,
-   advancing `snowplow__backfill_limit_days` per run (you will see
-   `Snowplow: New Snowplow incremental model. Backfilling` in the logs). With the
-   default 30-day limit and a start date a year back, that is about 12 runs. To
-   compress it, raise the limit temporarily:
+2. **Expect one backfill.** Every derived model now carries a `load_tstamp` column that
+   did not exist before, so on the first run each model's watermark resolves to
+   `snowplow__start_date` and history is replayed from there, advancing
+   `snowplow__backfill_limit_days` per run. With the default 30-day limit and a start
+   date a year back, that is about 12 runs. To compress it, raise the limit temporarily:
 
    ```bash
    dbt run --vars '{snowplow__backfill_limit_days: 400}'
    ```
 
-   Until the backfill completes, `identifier_mapping` will only cover the period
-   processed so far. Nothing is lost — every row is rebuilt from `atomic.events`.
+   Each run logs exactly what it is processing, so you can watch progress:
 
-4. **Drop the old tables** once you are happy, since dbt no longer manages them:
-
-   ```sql
-   drop table if exists <your_derived_schema>.snowplow_identities_id_changes;
-   drop table if exists <your_derived_schema>.snowplow_identities_id_mapping_scd;
-   drop table if exists <your_derived_schema>.snowplow_identities_new_identities;
-   drop table if exists <your_derived_schema>.snowplow_identities_snowplow_id_mapping_affected;
+   ```
+   Snowplow: snowplow_identities_identities at watermark 2026-07-14 -- processing load_tstamp from 2026-07-14 to 2026-08-14
    ```
 
-   dbt replaces the old `identifier_mapping` table with the view automatically, so
-   that one needs no manual step.
+   Until the backfill completes, the tables only cover the period processed so far.
+   Nothing is lost — every row is rebuilt from `atomic.events`.
+
+3. **Drop the old tables** once you are happy, since dbt no longer manages them:
+
+   ```sql
+   -- removed outputs
+   drop table if exists <derived_schema>.snowplow_identities_id_changes;
+   drop table if exists <derived_schema>.snowplow_identities_id_mapping_scd;
+   drop table if exists <derived_schema>.snowplow_identities_new_identities;
+   drop table if exists <derived_schema>.snowplow_identities_snowplow_id_mapping_affected;
+
+   -- the retired manifest framework
+   drop table if exists <manifest_schema>.snowplow_identities_incremental_manifest;
+   drop table if exists <scratch_schema>.snowplow_identities_base_events_this_run;
+   drop table if exists <scratch_schema>.snowplow_identities_base_new_event_limits;
+   drop table if exists <scratch_schema>.snowplow_identities_merge_events_this_run;
+   drop table if exists <scratch_schema>.snowplow_identities_new_identities_this_run;
+   drop table if exists <scratch_schema>.snowplow_identities_new_identifiers_this_run;
+   drop table if exists <scratch_schema>.snowplow_identities_identifier_mapping_this_run;
+   drop table if exists <scratch_schema>.snowplow_identities_snowplow_id_mapping_this_run;
+   drop table if exists <scratch_schema>.snowplow_identities_id_changes_this_run;
+   ```
+
+   dbt replaces the old `identifier_mapping` table with the view automatically, so that
+   one needs no manual step.
+
+### Set snowplow__backfill_limit_days above your largest gap
+
+A model's window can only advance if it finds data in it, so a gap between events larger
+than `snowplow__backfill_limit_days` stalls that model permanently. This was equally true
+of the manifest framework, but one case is worth calling out because it is easy to miss:
+
+**`merge_events` and `snowplow_id_mapping` advance off `identity_merge` events only**,
+which are far sparser than identity events. If your pipeline sees a merge every few days
+but you have set `snowplow__backfill_limit_days: 1`, those two models will stall while the
+others keep moving. Size the limit against your quietest event stream, not your busiest.
+The `snowplow_id_models_in_sync` test below is what tells you this has happened.
+
+### Two new observability tools
+
+Both are things the manifest gave you implicitly and self-watermarking otherwise would not.
+
+**Run-window logging.** Every model logs its watermark and the window it is about to
+process, replacing the old `print_run_limits` output. In normal operation all five models
+report the same window; during a backfill they legitimately differ.
+
+**`snowplow_id_models_in_sync`.** A test that fails when any model's watermark trails the
+furthest-ahead model by more than `snowplow__max_watermark_drift_days`, naming the lagging
+model. Without a shared manifest nothing else notices a model that has quietly fallen
+behind — it does self-heal, but you would not know it had happened. Keep the threshold
+comfortably above `snowplow__backfill_limit_days`, since models advance independently and
+some drift during a backfill is expected, not a fault.
 
 ---
 

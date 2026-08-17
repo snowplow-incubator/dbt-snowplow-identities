@@ -27,7 +27,7 @@ for db in ${DATABASES[@]}; do
   eval "dbt seed --full-refresh --target $db" || exit 1;
 
   echo "snowplow-identities integration tests: Execute models - run 1/4 (full refresh)"
-  eval "dbt run --full-refresh --vars '{snowplow__allow_refresh: true, snowplow__backfill_limit_days: 1}' --target $db" || exit 1;
+  eval "dbt run --full-refresh --vars '{snowplow__backfill_limit_days: 1}' --target $db" || exit 1;
 
   for i in {2..4}
   do

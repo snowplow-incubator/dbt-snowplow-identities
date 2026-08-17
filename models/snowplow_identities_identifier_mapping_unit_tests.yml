@@ -19,7 +19,7 @@ unit_tests:
     given:
       - input: ref('snowplow_identities_identifier_mapping_base')
         rows:
-          - {id_key: 'k_bbb', snowplow_id: 'sp_BBBB', id_type: 'DOMAIN_USERID', id_value: 'user-bbb', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2025-12-17 10:00:00.000', last_seen_at: '2025-12-17 10:00:10.000', first_seen_event_id: 'evt-001'}
+          - {id_key: 'k_bbb', snowplow_id: 'sp_BBBB', id_type: 'DOMAIN_USERID', id_value: 'user-bbb', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2025-12-17 10:00:00.000', last_seen_at: '2025-12-17 10:00:10.000', first_seen_event_id: 'evt-001', load_tstamp: '2025-12-18 11:00:00.000'}
       - input: ref('snowplow_identities_snowplow_id_mapping')
         rows:
           - {snowplow_id: 'sp_BBBB', active_snowplow_id: 'sp_AAAA', merged_at: '2025-12-18 10:02:00.000', model_tstamp: '2025-12-18 10:05:00.000'}
@@ -42,8 +42,8 @@ unit_tests:
     given:
       - input: ref('snowplow_identities_identifier_mapping_base')
         rows:
-          - {id_key: 'k_ccc', snowplow_id: 'sp_CCCC', id_type: 'DOMAIN_USERID', id_value: 'user-shared', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2025-12-17 09:00:00.000', last_seen_at: '2025-12-17 09:00:10.000', first_seen_event_id: 'evt-ccc'}
-          - {id_key: 'k_ddd', snowplow_id: 'sp_DDDD', id_type: 'DOMAIN_USERID', id_value: 'user-shared', first_app_id: 'mobile', last_app_id: 'mobile', first_seen_at: '2025-12-17 11:00:00.000', last_seen_at: '2025-12-17 11:00:10.000', first_seen_event_id: 'evt-ddd'}
+          - {id_key: 'k_ccc', snowplow_id: 'sp_CCCC', id_type: 'DOMAIN_USERID', id_value: 'user-shared', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2025-12-17 09:00:00.000', last_seen_at: '2025-12-17 09:00:10.000', first_seen_event_id: 'evt-ccc', load_tstamp: '2025-12-18 11:00:00.000'}
+          - {id_key: 'k_ddd', snowplow_id: 'sp_DDDD', id_type: 'DOMAIN_USERID', id_value: 'user-shared', first_app_id: 'mobile', last_app_id: 'mobile', first_seen_at: '2025-12-17 11:00:00.000', last_seen_at: '2025-12-17 11:00:10.000', first_seen_event_id: 'evt-ddd', load_tstamp: '2025-12-18 11:00:00.000'}
       - input: ref('snowplow_identities_snowplow_id_mapping')
         rows:
           - {snowplow_id: 'sp_CCCC', active_snowplow_id: 'sp_AAAA', merged_at: '2025-12-18 10:02:00.000', model_tstamp: '2025-12-18 10:05:00.000'}
@@ -62,7 +62,7 @@ unit_tests:
     given:
       - input: ref('snowplow_identities_identifier_mapping_base')
         rows:
-          - {id_key: 'k_aaa', snowplow_id: 'sp_AAAA', id_type: 'USER_ID', id_value: 'john@example.com', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2025-12-18 10:00:00.000', last_seen_at: '2025-12-18 10:00:10.000', first_seen_event_id: 'evt-001'}
+          - {id_key: 'k_aaa', snowplow_id: 'sp_AAAA', id_type: 'USER_ID', id_value: 'john@example.com', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2025-12-18 10:00:00.000', last_seen_at: '2025-12-18 10:00:10.000', first_seen_event_id: 'evt-001', load_tstamp: '2025-12-18 11:00:00.000'}
       - input: ref('snowplow_identities_snowplow_id_mapping')
         rows: []
     expect:
@@ -81,8 +81,8 @@ unit_tests:
     given:
       - input: ref('snowplow_identities_identifier_mapping_base')
         rows:
-          - {id_key: 'k_bbb', snowplow_id: 'sp_BBBB', id_type: 'DOMAIN_USERID', id_value: 'user-bbb', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2025-12-17 10:00:00.000', last_seen_at: '2025-12-17 10:00:10.000', first_seen_event_id: 'evt-bbb'}
-          - {id_key: 'k_ccc', snowplow_id: 'sp_CCCC', id_type: 'DOMAIN_USERID', id_value: 'user-ccc', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2025-12-17 11:00:00.000', last_seen_at: '2025-12-17 11:00:10.000', first_seen_event_id: 'evt-ccc'}
+          - {id_key: 'k_bbb', snowplow_id: 'sp_BBBB', id_type: 'DOMAIN_USERID', id_value: 'user-bbb', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2025-12-17 10:00:00.000', last_seen_at: '2025-12-17 10:00:10.000', first_seen_event_id: 'evt-bbb', load_tstamp: '2025-12-18 11:00:00.000'}
+          - {id_key: 'k_ccc', snowplow_id: 'sp_CCCC', id_type: 'DOMAIN_USERID', id_value: 'user-ccc', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2025-12-17 11:00:00.000', last_seen_at: '2025-12-17 11:00:10.000', first_seen_event_id: 'evt-ccc', load_tstamp: '2025-12-18 11:00:00.000'}
       - input: ref('snowplow_identities_snowplow_id_mapping')
         rows:
           - {snowplow_id: 'sp_BBBB', active_snowplow_id: 'sp_AAAA', merged_at: '2025-12-18 10:02:00.000', model_tstamp: '2025-12-18 10:05:00.000'}
@@ -104,8 +104,8 @@ unit_tests:
     given:
       - input: ref('snowplow_identities_identifier_mapping_base')
         rows:
-          - {id_key: 'k_old', snowplow_id: 'sp_OLD', id_type: 'DOMAIN_USERID', id_value: 'user-recycled', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2025-01-01 10:00:00.000', last_seen_at: '2025-01-01 10:00:10.000', first_seen_event_id: 'evt-old'}
-          - {id_key: 'k_new', snowplow_id: 'sp_NEW', id_type: 'DOMAIN_USERID', id_value: 'user-recycled', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2025-12-01 10:00:00.000', last_seen_at: '2025-12-01 10:00:10.000', first_seen_event_id: 'evt-new'}
+          - {id_key: 'k_old', snowplow_id: 'sp_OLD', id_type: 'DOMAIN_USERID', id_value: 'user-recycled', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2025-01-01 10:00:00.000', last_seen_at: '2025-01-01 10:00:10.000', first_seen_event_id: 'evt-old', load_tstamp: '2025-12-18 11:00:00.000'}
+          - {id_key: 'k_new', snowplow_id: 'sp_NEW', id_type: 'DOMAIN_USERID', id_value: 'user-recycled', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2025-12-01 10:00:00.000', last_seen_at: '2025-12-01 10:00:10.000', first_seen_event_id: 'evt-new', load_tstamp: '2025-12-18 11:00:00.000'}
       - input: ref('snowplow_identities_snowplow_id_mapping')
         rows: []
     expect:

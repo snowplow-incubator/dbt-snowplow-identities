@@ -3,7 +3,7 @@
 -- through this table lands on an intermediate rather than the final root.
 --
 -- snowplow_identities_identifier_mapping resolves exactly one hop, so it depends on
--- this holding. The true_parents filter in snowplow_id_mapping_this_run is what
+-- this holding. The true_parents filter in snowplow_id_mapping is what
 -- guarantees it; this test is the guard.
 -- Returns rows that violate the invariant (should return 0).
 
