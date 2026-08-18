@@ -60,7 +60,7 @@ with prep as (
     {%- if var('snowplow__app_id', []) | length > 0 %}
     and app_id in ({% for aid in var('snowplow__app_id', []) %}'{{ aid }}'{% if not loop.last %}, {% endif %}{% endfor %})
     {%- endif %}
-    qualify row_number() over (partition by event_id order by collector_tstamp) = 1
+    qualify row_number() over (partition by event_id order by load_tstamp, derived_tstamp) = 1
 )
 
 select
