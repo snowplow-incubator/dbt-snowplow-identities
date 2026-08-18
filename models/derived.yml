@@ -1,41 +1,64 @@
 version: 2
 
 models:
-  - name: snowplow_identities_id_changes
-    description: '{{ doc("table_id_changes") }}'
+  - name: snowplow_identities_merge_events
+    description: '{{ doc("table_merge_events") }}'
     columns:
-      - name: id_change_key
-        description: 'A unique identifier for the identity change record.'
+      - name: merge_event_id
+        description: 'The event_id of the identity_merge event.'
+        tests:
+          - not_null
+          - unique
+      - name: active_snowplow_id
+        description: 'The winning identity this merge event resolved to.'
+      - name: merged
+        description: 'The cumulative array of identities merged into active_snowplow_id, each with its own merged_at and triggering_event_id.'
+      - name: merges
+        description: 'The cumulative array of merge event ids for this identity group.'
+      - name: collector_tstamp
+        description: 'The collector_tstamp of the merge event.'
+      - name: derived_tstamp
+        description: 'The derived_tstamp of the merge event.'
+      - name: load_tstamp
+        description: 'The load_tstamp of the merge event. This model self-watermarks off its max.'
+        tests:
+          - not_null
+
+  - name: snowplow_identities_identities
+    description: '{{ doc("table_identities") }}'
+    columns:
+      - name: snowplow_id
+        description: 'The snowplow_id as seen at event time. It may have been merged since; resolve through snowplow_id_mapping for the current parent.'
+        tests:
+          - not_null
+          - unique
+      - name: created_at
+        description: 'The identity creation timestamp of the given snowplow_id taken from the identity context.'
+      - name: first_seen_event_id
+        description: 'The event_id of the first event belonging to this snowplow_id.'
+      - name: first_app_id
+        description: 'The app_id from the first event associated with this snowplow_id.'
+      - name: last_app_id
+        description: 'The app_id from the last event associated with this snowplow_id.'
+      - name: first_derived_tstamp
+        description: 'The derived_tstamp from the first event associated with this snowplow_id.'
+      - name: last_derived_tstamp
+        description: 'The derived_tstamp from the last event associated with this snowplow_id.'
+      - name: load_tstamp
+        description: 'The newest load_tstamp seen for this identity. This model self-watermarks off its max.'
+        tests:
+          - not_null
+
+  - name: snowplow_identities_identifier_mapping_base
+    description: '{{ doc("table_identifier_mapping_base") }}'
+    columns:
+      - name: id_key
+        description: 'Immutable surrogate key based on (snowplow_id, id_type, id_value). Never changes, so merges never rewrite a row. Not the same as the view''s uuid, which is keyed on active_snowplow_id.'
         tests:
           - not_null
           - unique
       - name: snowplow_id
-        description: 'The snowplow_id after the change. For merges, this is the parent/canonical ID. For creates, this is the new ID.'
-        tests:
-          - not_null
-      - name: previous_snowplow_id
-        description: 'The ID that was merged into snowplow_id (NULL for new ID creation).'
-      - name: effective_at
-        description: 'Event time - when this change actually occurred (from derived_tstamp for creates, merged_at for merges).'
-        tests:
-          - not_null
-      - name: changed_at
-        description: 'Processing time - when dbt materialized this record. Useful for incremental logic and pipeline monitoring.'
-      - name: change_type
-        description: 'Indicates whether the record was created due to a new identity creation or a merge event.'
-      - name: first_seen_event_id
-        description: 'The event that triggered this change.'
-      - name: first_seen_app_id
-        description: 'The app_id where this change originated.'
-  - name: snowplow_identities_identifier_mapping
-    description: '{{ doc("table_identifier_mapping") }}'
-    columns:
-      - name: uuid
-        description: 'Surrogate key for the identifier mapping record, based on (active_snowplow_id, id_type, id_value). Unique per resolved identity and identifier combination.'
-        tests:
-          - not_null
-      - name: active_snowplow_id
-        description: 'The current, canonical Snowplow ID after considering all merges .'
+        description: 'The identity that carried this identifier at event time. May since have been merged; resolve through snowplow_id_mapping (or query the identifier_mapping view) for the current parent.'
         tests:
           - not_null
       - name: id_type
@@ -43,63 +66,68 @@ models:
       - name: id_value
         description: 'The actual (or hashed) identifier value.'
       - name: first_app_id
-        description: 'The app_id of the event where this id was first observed .'
+        description: 'The app_id of the event where this id was first observed under this snowplow_id.'
       - name: last_app_id
-        description: 'The app_id of the event where this id was most recently observed  .'
+        description: 'The app_id of the event where this id was most recently observed under this snowplow_id.'
       - name: first_seen_at
-        description: 'The derived_tstamp from the first event associated with this snowplow_id .'
+        description: 'The derived_tstamp of the first event contributing this identifier under this snowplow_id.'
       - name: last_seen_at
-        description: 'The derived_tstamp from the last event associated with this snowplow_id .'
+        description: 'The derived_tstamp of the last event contributing this identifier under this snowplow_id.'
       - name: first_seen_event_id
-        description: 'The first event that contributed this identifier to the mapping.'
-  - name: snowplow_identities_snowplow_id_mapping
-    description: '{{ doc("table_snowplow_id_mapping") }}'
+        description: 'The first event that contributed this identifier under this snowplow_id.'
+      - name: load_tstamp
+        description: 'The newest load_tstamp seen for this identifier. This model self-watermarks off its max.'
+        tests:
+          - not_null
+
+  - name: snowplow_identities_identifier_mapping
+    description: '{{ doc("table_identifier_mapping") }}'
     columns:
-      - name: snowplow_id
-        description: 'A Snowplow ID currently represented by the canonical active_snowplow_id after considering all merges .'
+      - name: uuid
+        description: 'Surrogate key for the identifier mapping record, based on (active_snowplow_id, id_type, id_value). Unique per resolved identity and identifier combination.'
         tests:
           - not_null
           - unique
       - name: active_snowplow_id
-        description: 'The current, canonical snowplow_id after considering all merges .'
+        description: 'The current, canonical Snowplow ID after considering all merges.'
+        tests:
+          - not_null
+      - name: id_type
+        description: 'The type of identifier (e.g., "email", "user_id", "domain_userid") associated with the snowplow_id.'
+      - name: id_value
+        description: 'The actual (or hashed) identifier value.'
+      - name: first_app_id
+        description: 'The app_id of the event where this id was first observed.'
+      - name: last_app_id
+        description: 'The app_id of the event where this id was most recently observed.'
+      - name: first_seen_at
+        description: 'The derived_tstamp from the first event associated with this identifier.'
+      - name: last_seen_at
+        description: 'The derived_tstamp from the last event associated with this identifier.'
+      - name: first_seen_event_id
+        description: 'The first event that contributed this identifier to the mapping.'
+
+  - name: snowplow_identities_snowplow_id_mapping
+    description: '{{ doc("table_snowplow_id_mapping") }}'
+    columns:
+      - name: snowplow_id
+        description: 'A Snowplow ID currently represented by the canonical active_snowplow_id after considering all merges.'
+        tests:
+          - not_null
+          - unique
+      - name: active_snowplow_id
+        description: 'The current, canonical snowplow_id after considering all merges.'
+        tests:
+          - not_null
       - name: merged_at
-        description: 'The timestamp when the identifier was merged.'
+        description: 'The timestamp when the identity was merged.'
+      - name: merge_event_id
+        description: 'An identity_merge event carrying this edge. Because merged arrays are cumulative, several events re-list the same edge, so this is the earliest seen in the processing window and may differ between runs.'
+      - name: triggering_event_id
+        description: 'The event that triggered this identity''s merge. Stable across cumulative re-reports of the edge.'
+      - name: load_tstamp
+        description: 'The load_tstamp of the merge event carrying this edge. This model self-watermarks off its max.'
+        tests:
+          - not_null
       - name: model_tstamp
         description: 'The timestamp when this record was created in the model.'
-  - name: snowplow_identities_id_mapping_scd
-    description: '{{ doc("table_id_mapping_scd") }}'
-    columns:
-      - name: scd_key
-        description: 'Surrogate key for the SCD record, based on (snowplow_id, effective_at, change_type) for merges or (snowplow_id, change_type) for creates. Used as the incremental merge key.'
-        tests:
-          - not_null
-      - name: snowplow_id
-        description: 'The Snowplow ID being mapped. For merges, this is the child ID that was merged into a parent. For creates, this is the newly created ID.'
-        tests:
-          - not_null
-      - name: active_snowplow_id
-        description: 'The canonical parent ID for this validity period. Handles transitive merges.'
-        tests:
-          - not_null
-      - name: effective_at
-        description: 'Event time - when this mapping became valid (from the merge or create event).'
-        tests:
-          - not_null
-      - name: superseded_at
-        description: 'Event time - when this mapping was superseded by a new mapping. NULL if this is the current mapping.'
-      - name: changed_at
-        description: 'Processing time - when dbt discovered this change.'
-      - name: change_type
-        description: 'Type of change: "created" for new IDs or "merged" for merge events.'
-      - name: first_seen_event_id
-        description: 'The event that triggered this change.'
-      - name: first_seen_app_id
-        description: 'The app_id where this change originated.'
-      - name: is_current
-        description: 'Derived flag: true if superseded_at IS NULL, indicating this is the current active mapping.'
-    tests:
-      - dbt_utils.unique_combination_of_columns:
-          arguments:
-            combination_of_columns:
-              - snowplow_id
-              - effective_at

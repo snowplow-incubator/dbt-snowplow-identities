@@ -66,8 +66,6 @@ seeds:
         collector_tstamp: timestamp
         derived_tstamp: timestamp
         merged_at: timestamp
-        effective_at: timestamp
-        superseded_at: timestamp
         first_seen_at: timestamp
         last_seen_at: timestamp
         first_derived_tstamp: timestamp

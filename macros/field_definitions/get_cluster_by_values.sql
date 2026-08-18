@@ -11,18 +11,16 @@ You may obtain a copy of the Snowplow Personal and Academic License Version 1.0 
 
 
 {% macro default__get_cluster_by_values(model) %}
-    {% if model == 'merge_events' %}
-        {{ return(snowplow_utils.get_value_by_target_type(bigquery_val=["active_snowplow_id"], snowflake_val=["active_snowplow_id"])) }}
-    {% elif model == 'new_identities' %}
+    {% if model == 'stg_identity_events' %}
         {{ return(snowplow_utils.get_value_by_target_type(bigquery_val=["snowplow_id"], snowflake_val=["snowplow_id"])) }}
-    {% elif model == 'identifier_mapping' %}
-        {{ return(snowplow_utils.get_value_by_target_type(bigquery_val=["active_snowplow_id", "uuid"], snowflake_val=["active_snowplow_id", "uuid"])) }}
-    {% elif model == 'id_changes' %}
-        {{ return(snowplow_utils.get_value_by_target_type(bigquery_val=["snowplow_id", "previous_snowplow_id"], snowflake_val=["snowplow_id", "previous_snowplow_id"])) }}
+    {% elif model == 'merge_events' %}
+        {{ return(snowplow_utils.get_value_by_target_type(bigquery_val=["active_snowplow_id"], snowflake_val=["active_snowplow_id"])) }}
+    {% elif model == 'identities' %}
+        {{ return(snowplow_utils.get_value_by_target_type(bigquery_val=["snowplow_id"], snowflake_val=["snowplow_id"])) }}
+    {% elif model == 'identifier_mapping_base' %}
+        {{ return(snowplow_utils.get_value_by_target_type(bigquery_val=["snowplow_id", "id_key"], snowflake_val=["snowplow_id", "id_key"])) }}
     {% elif model == 'snowplow_id_mapping' %}
         {{ return(snowplow_utils.get_value_by_target_type(bigquery_val=["active_snowplow_id", "snowplow_id"], snowflake_val=["active_snowplow_id", "snowplow_id"])) }}
-    {% elif model == 'id_mapping_scd' %}
-        {{ return(snowplow_utils.get_value_by_target_type(bigquery_val=["snowplow_id", "active_snowplow_id"], snowflake_val=["snowplow_id", "active_snowplow_id"])) }}
     {% else %}
         {{ exceptions.raise_compiler_error(
       "Snowplow Error: Model "~model~" not defined for cluster by."

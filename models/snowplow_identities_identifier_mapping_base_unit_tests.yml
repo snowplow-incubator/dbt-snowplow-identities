@@ -1,0 +1,132 @@
+version: 2
+
+# These now drive off stg_identity_events, so the unpivot, the per-identifier first/last
+# attribution and the cross-run fold are all exercised in one model. The fixture columns
+# match the default snowplow__identifiers (domain_userid, user_id).
+#
+# id_key is omitted from expectations: surrogate key over a non-deterministic hash.
+
+unit_tests:
+
+  - name: test__snowplow_identities_identifier_mapping_base__unpivots_per_identifier
+    description: >
+      One event carrying both a domain_userid and a user_id must produce two rows, one per
+      identifier type, each under the same snowplow_id.
+    model: snowplow_identities_identifier_mapping_base
+    config:
+      tags: ["snowflake_only"]
+    overrides:
+      macros:
+        is_incremental: false
+      vars:
+        snowplow__start_date: '2025-12-01'
+        snowplow__backfill_limit_days: 90
+    given:
+      - input: ref('snowplow_identities_stg_identity_events')
+        rows:
+          - {snowplow_id: 'sp_AAAA', created_at: '2025-12-18 10:00:00.500', domain_userid: 'user-aaa', user_id: 'john@example.com', event_id: 'evt-001', app_id: 'web', derived_tstamp: '2025-12-18 10:00:00.000', collector_tstamp: '2025-12-18 10:00:00.100', load_tstamp: '2025-12-18 11:00:00.000'}
+    expect:
+      rows:
+        - {snowplow_id: 'sp_AAAA', id_type: 'DOMAIN_USERID', id_value: 'user-aaa', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2025-12-18 10:00:00.000', last_seen_at: '2025-12-18 10:00:00.000', first_seen_event_id: 'evt-001', load_tstamp: '2025-12-18 11:00:00.000'}
+        - {snowplow_id: 'sp_AAAA', id_type: 'USER_ID', id_value: 'john@example.com', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2025-12-18 10:00:00.000', last_seen_at: '2025-12-18 10:00:00.000', first_seen_event_id: 'evt-001', load_tstamp: '2025-12-18 11:00:00.000'}
+
+  - name: test__snowplow_identities_identifier_mapping_base__first_seen_event_per_identifier
+    description: >
+      evt-001 carries domain_userid only; evt-002 adds user_id. Each identifier must get the
+      event that actually introduced it, not the identity's first event. This is the
+      attribution bug fixed in e219ee6, kept under test.
+    model: snowplow_identities_identifier_mapping_base
+    config:
+      tags: ["snowflake_only"]
+    overrides:
+      macros:
+        is_incremental: false
+      vars:
+        snowplow__start_date: '2025-12-01'
+        snowplow__backfill_limit_days: 90
+    given:
+      - input: ref('snowplow_identities_stg_identity_events')
+        rows:
+          - {snowplow_id: 'sp_AAAA', created_at: '2025-12-18 10:00:00.500', domain_userid: 'user-aaa', user_id: null, event_id: 'evt-001', app_id: 'web', derived_tstamp: '2025-12-18 10:00:00.000', collector_tstamp: '2025-12-18 10:00:00.100', load_tstamp: '2025-12-18 11:00:00.000'}
+          - {snowplow_id: 'sp_AAAA', created_at: '2025-12-18 10:00:00.500', domain_userid: 'user-aaa', user_id: 'john123', event_id: 'evt-002', app_id: 'mobile', derived_tstamp: '2025-12-18 10:01:00.000', collector_tstamp: '2025-12-18 10:01:00.100', load_tstamp: '2025-12-18 11:00:00.000'}
+    expect:
+      rows:
+        - {snowplow_id: 'sp_AAAA', id_type: 'DOMAIN_USERID', id_value: 'user-aaa', first_app_id: 'web', last_app_id: 'mobile', first_seen_at: '2025-12-18 10:00:00.000', last_seen_at: '2025-12-18 10:01:00.000', first_seen_event_id: 'evt-001', load_tstamp: '2025-12-18 11:00:00.000'}
+        - {snowplow_id: 'sp_AAAA', id_type: 'USER_ID', id_value: 'john123', first_app_id: 'mobile', last_app_id: 'mobile', first_seen_at: '2025-12-18 10:01:00.000', last_seen_at: '2025-12-18 10:01:00.000', first_seen_event_id: 'evt-002', load_tstamp: '2025-12-18 11:00:00.000'}
+
+  - name: test__snowplow_identities_identifier_mapping_base__same_identifier_under_two_ids_stays_two_rows
+    description: >
+      Two snowplow_ids carry the same identifier value. At this grain they must stay two
+      distinct rows with distinct id_keys -- collapsing them is the view's job once
+      snowplow_id_mapping says they share a parent. Keeping them separate is what lets an
+      identifier be re-used by a new identity under TTL without rewriting history.
+    model: snowplow_identities_identifier_mapping_base
+    config:
+      tags: ["snowflake_only"]
+    overrides:
+      macros:
+        is_incremental: false
+      vars:
+        snowplow__start_date: '2025-12-01'
+        snowplow__backfill_limit_days: 90
+    given:
+      - input: ref('snowplow_identities_stg_identity_events')
+        rows:
+          - {snowplow_id: 'sp_GTRZ', created_at: '2025-12-18 10:00:00.500', domain_userid: 'duid_shared', user_id: null, event_id: 'evt-gtrz', app_id: 'web', derived_tstamp: '2025-12-18 10:00:01.000', collector_tstamp: '2025-12-18 10:00:01.100', load_tstamp: '2025-12-18 11:00:00.000'}
+          - {snowplow_id: 'sp_KKHE', created_at: '2025-12-18 10:00:02.500', domain_userid: 'duid_shared', user_id: null, event_id: 'evt-kkhe', app_id: 'web', derived_tstamp: '2025-12-18 10:00:02.000', collector_tstamp: '2025-12-18 10:00:02.100', load_tstamp: '2025-12-18 11:00:00.000'}
+    expect:
+      rows:
+        - {snowplow_id: 'sp_GTRZ', id_type: 'DOMAIN_USERID', id_value: 'duid_shared', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2025-12-18 10:00:01.000', last_seen_at: '2025-12-18 10:00:01.000', first_seen_event_id: 'evt-gtrz', load_tstamp: '2025-12-18 11:00:00.000'}
+        - {snowplow_id: 'sp_KKHE', id_type: 'DOMAIN_USERID', id_value: 'duid_shared', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2025-12-18 10:00:02.000', last_seen_at: '2025-12-18 10:00:02.000', first_seen_event_id: 'evt-kkhe', load_tstamp: '2025-12-18 11:00:00.000'}
+
+  - name: test__snowplow_identities_identifier_mapping_base__null_snowplow_id_excluded
+    description: >
+      Rows whose snowplow_id is null cannot be keyed or resolved, so they are dropped rather
+      than written with a null-derived id_key.
+    model: snowplow_identities_identifier_mapping_base
+    config:
+      tags: ["snowflake_only"]
+    overrides:
+      macros:
+        is_incremental: false
+      vars:
+        snowplow__start_date: '2025-12-01'
+        snowplow__backfill_limit_days: 90
+    given:
+      - input: ref('snowplow_identities_stg_identity_events')
+        rows:
+          - {snowplow_id: 'sp_AAAA', created_at: '2025-12-18 10:00:00.500', domain_userid: 'user-aaa', user_id: null, event_id: 'evt-001', app_id: 'web', derived_tstamp: '2025-12-18 10:00:00.000', collector_tstamp: '2025-12-18 10:00:00.100', load_tstamp: '2025-12-18 11:00:00.000'}
+          - {snowplow_id: null, created_at: null, domain_userid: 'user-orphan', user_id: null, event_id: 'evt-002', app_id: 'web', derived_tstamp: '2025-12-18 10:01:00.000', collector_tstamp: '2025-12-18 10:01:00.100', load_tstamp: '2025-12-18 11:00:00.000'}
+    expect:
+      rows:
+        - {snowplow_id: 'sp_AAAA', id_type: 'DOMAIN_USERID', id_value: 'user-aaa', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2025-12-18 10:00:00.000', last_seen_at: '2025-12-18 10:00:00.000', first_seen_event_id: 'evt-001', load_tstamp: '2025-12-18 11:00:00.000'}
+
+  - name: test__snowplow_identities_identifier_mapping_base__preserve_first_seen_at
+    description: >
+      Incremental: a user seen on Monday reappears on Wednesday under the same snowplow_id,
+      so the same id_key. first_seen_at and its app_id/event_id must be preserved from
+      Monday while last_* advances to Wednesday, and load_tstamp must advance so the
+      watermark moves forward.
+    model: snowplow_identities_identifier_mapping_base
+    config:
+      tags: ["snowflake_only"]
+    overrides:
+      macros:
+        is_incremental: true
+      vars:
+        snowplow__start_date: '2025-12-01'
+        snowplow__backfill_limit_days: 90
+    given:
+      - input: ref('snowplow_identities_stg_identity_events')
+        rows:
+          - {snowplow_id: 'sp_AAAA', created_at: '2025-12-15 10:00:00.500', domain_userid: 'user-aaa', user_id: null, event_id: 'evt-wed', app_id: 'mobile', derived_tstamp: '2025-12-17 10:00:00.000', collector_tstamp: '2025-12-17 10:00:00.100', load_tstamp: '2025-12-17 11:00:00.000'}
+      # The fold joins on (snowplow_id, id_type, id_value), not id_key, so this fixture's
+      # id_key value is irrelevant to the match. That is deliberate: id_key is generated
+      # inside the model, so a fold keyed on it could not be unit tested without pinning a
+      # hash.
+      - input: this
+        rows:
+          - {id_key: 'k_aaa', snowplow_id: 'sp_AAAA', id_type: 'DOMAIN_USERID', id_value: 'user-aaa', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2025-12-15 10:00:00.000', last_seen_at: '2025-12-15 10:00:10.000', first_seen_event_id: 'evt-mon', load_tstamp: '2025-12-15 11:00:00.000'}
+    expect:
+      rows:
+        - {snowplow_id: 'sp_AAAA', id_type: 'DOMAIN_USERID', id_value: 'user-aaa', first_app_id: 'web', last_app_id: 'mobile', first_seen_at: '2025-12-15 10:00:00.000', last_seen_at: '2025-12-17 10:00:00.000', first_seen_event_id: 'evt-mon', load_tstamp: '2025-12-17 11:00:00.000'}

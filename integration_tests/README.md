@@ -64,7 +64,7 @@ See [SCENARIOS.md](SCENARIOS.md) for the complete registry mapping each group to
 
 1. Choose a short prefix (e.g., `NEWSCN`)
 2. Add events to `data/source/snowplow_identities_events.csv`
-3. Update all 6 expected CSVs in `data/expected/`
+3. Update all 4 expected CSVs in `data/expected/`
 4. Add a section to `SCENARIOS.md`
 
 ## Validated Tables
@@ -72,8 +72,6 @@ See [SCENARIOS.md](SCENARIOS.md) for the complete registry mapping each group to
 After all 4 runs, these derived tables are compared against expected seeds:
 
 - `snowplow_identities_snowplow_id_mapping`
-- `snowplow_identities_id_changes`
 - `snowplow_identities_identifier_mapping`
-- `snowplow_identities_id_mapping_scd`
-- `snowplow_identities_new_identities`
+- `snowplow_identities_identities`
 - `snowplow_identities_merge_events`

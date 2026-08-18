@@ -1,11 +1,31 @@
 version: 2
 
 macros:
-  - name: allow_refresh
-    description: '{{ doc("macro_allow_refresh") }}'
   - name: get_cluster_by_values
     description: '{{ doc("macro_get_cluster_by_values") }}'
     arguments:
       - name: model
         type: string
         description: Short name of model to select which fields to cluster by
+  - name: get_incremental_filter
+    description: '{{ doc("macro_get_incremental_filter") }}'
+    arguments:
+      - name: relation_alias
+        type: string
+        description: Alias of the source relation in the query (e.g. 'e'), or none if the query does not alias it.
+      - name: use_atomic_partition
+        type: boolean
+        description: >
+          Set true for staging models reading atomic.events, to also emit a predicate on
+          atomic's physical partition column so the warehouse can prune. Configure with
+          snowplow__partition_tstamp and snowplow__partition_tstamp_type.
+  - name: extract_merged
+    description: >
+      Flattens the cumulative `merged` array of a merge-events relation into one row per
+      (parent, child) edge. Dispatched per warehouse.
+    arguments:
+      - name: source_relation
+        type: string
+        description: >
+          Name of a CTE or relation carrying active_snowplow_id, merge_event_id, merged
+          and load_tstamp.

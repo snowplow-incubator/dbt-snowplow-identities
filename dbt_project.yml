@@ -1,5 +1,5 @@
 name: 'snowplow_identities'
-version: '0.0.1'
+version: '0.2.0'
 config-version: 2
 
 require-dbt-version: [">=1.10.6", "<2.0.0"]
@@ -26,46 +26,29 @@ models:
     +file_format: "{{ 'delta' if target.type not in ['spark'] else 'iceberg'}}"
     +incremental_strategy: "{{ None if target.type not in ['spark'] else 'merge' }}"
     +bind: false
-    +tags: "snowplow_identities_incremental"
     +schema: "derived"
-    base:
-      +tags: "base"
-      manifest:
-        +schema: "snowplow_manifest"
-      scratch:
-        +schema: "scratch"
-        +tags: "scratch"
-    merge_events:
-      +schema: "derived"
-      +tags: "snowplow_identities_incremental"
-      scratch:
-        +schema: "scratch"
-        +tags: "scratch"
-    new_identities:
-      +schema: "derived"
-      +tags: "snowplow_identities_incremental"
-      scratch:
-        +schema: "scratch"
-        +tags: "scratch"
-    scratch:
+    staging:
       +schema: "scratch"
-      +tags: "scratch"
+      +tags: "staging"
 
 vars:
   snowplow_identities:
     # OPERATION & LOGIC
     snowplow__start_date: '2026-01-01' # The date from which to start processing events
-    snowplow__allow_refresh: false #  If set to true, the incremental manifest will be dropped when running with a `--full-refresh` flag
-    snowplow__dev_target_name: dev # If the target matches the dev target, there is no need to set the snowplow__allow_refresh to true to drop the manifest table as well
     snowplow__hash_identifiers: false # Set to true to hash identifiers before processing (recommended for PII compliance)
     snowplow__identifiers: [{'reference': 'domain_userid', 'alias': 'domain_userid'}, {'reference': 'user_id', 'alias': 'user_id'}] # List of identifiers to process.
-    snowplow__backfill_limit_days: 30
+    snowplow__backfill_limit_days: 30 # New days of data each model advances per run. Must exceed the largest expected gap between events, or progress will stall.
+    snowplow__lookback_days: 1 # Days of overlap re-scanned each run for late-arriving data. Also the run-twice idempotency window.
+    snowplow__max_watermark_drift_days: 7 # Fails snowplow_id_models_in_sync if any model's watermark falls this far behind the furthest-ahead model.
     # filter your data:
     snowplow__app_id: []
 
     # WAREHOUSE & TRACKER
     snowplow__databricks_catalog: "hive_metastore"
     # snowplow__atomic_schema: 'atomic' # Only set if not using 'atomic' schema for Snowplow events data
+    snowplow__partition_tstamp: "load_tstamp" # The column atomic.events is physically partitioned by. Set to 'collector_tstamp' if that is your partition key, so staging scans still prune.
+    snowplow__partition_tstamp_type: "timestamp" # Type of snowplow__partition_tstamp: 'timestamp' or 'date'. Set to 'date' when the partition column is a DATE, so the prune predicate uses matching-typed bounds.
+    snowplow__partition_buffer_days: 2 # Extra days added to the partition-prune predicate to absorb collector-to-load lag when snowplow__partition_tstamp is not load_tstamp.
     # snowplow__database: # Only set if not using target.database for Snowplow events data -- WILL BE IGNORED FOR DATABRICKS
     # snowplow__events_table: "events" # Only set if not using 'events' table for Snowplow events data
     # PRIVATE VARS - DO NOT MODIFY
@@ -75,10 +58,8 @@ vars:
     snowplow__license_accepted: false
 
 on-run-start:
-  - "{{ snowplow_utils.snowplow_delete_from_manifest(var('models_to_remove',[])) }}"
   - "{{ snowplow_utils.license_check(var('snowplow__license_accepted')) }}"
 on-run-end:
-  - "{{ snowplow_utils.snowplow_incremental_post_hook_t(package_name='snowplow_identities', incremental_manifest_table_name='snowplow_identities_incremental_manifest', base_events_this_run_table_name='snowplow_identities_base_events_this_run') }}"
   - "{{ snowplow_utils.grant_usage_on_schemas_built_into(var('snowplow__grant_schemas', true)) }}"
 flags:
   require_generic_test_arguments_property: true
