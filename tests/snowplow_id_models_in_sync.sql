@@ -1,22 +1,10 @@
 {#
-  Out-of-sync detection.
+  Out-of-sync detection. Without a shared manifest, a model that errors just quietly falls
+  behind -- it self-heals, but nothing tells you. Reports any model whose watermark trails
+  the furthest-ahead model by more than snowplow__max_watermark_drift_days.
 
-  With a shared manifest, the framework noticed when models had drifted apart and pulled
-  them back into step. Self-watermarking has no such coordinator: each model advances off
-  its own max(load_tstamp), so a model that errors for a week just quietly falls behind. It
-  does catch up on its own, but nothing tells you it is behind in the meantime.
-
-  This test is that signal. It reports every model whose watermark trails the
-  furthest-ahead model by more than snowplow__max_watermark_drift_days, so drift surfaces
-  as a test failure naming the lagging model rather than as unexplained gaps in the data.
-
-  Some drift is normal and expected: models advance at most snowplow__backfill_limit_days
-  per run and there is no barrier between them, so during a backfill they legitimately sit
-  at different points. Keep the threshold comfortably above backfill_limit_days.
-
-  snowplow_id_mapping is excluded when empty -- a pipeline with no merges yet has no rows
-  to carry a watermark, which is not drift.
-
+  Some drift is normal during a backfill, so keep the threshold above
+  snowplow__backfill_limit_days. snowplow_id_mapping is skipped when empty (no merges yet).
   Returns rows that violate the invariant (should return 0).
 #}
 

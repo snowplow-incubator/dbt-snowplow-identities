@@ -6,35 +6,17 @@ You may obtain a copy of the Snowplow Personal and Academic License Version 1.0 
 #}
 
 {#
-  Self-watermarking incremental filter. Each model asks its own table "what is the newest
-  data I already have?" (max load_tstamp) and processes forward from there, in day-aligned
-  windows. No shared manifest, no run hooks: if a run fails, the affected model is simply
-  behind and catches up next run.
+  Self-watermarking incremental filter: each model processes forward from the newest
+  load_tstamp in its own table, in day-aligned windows.
 
-  Arguments:
-    relation_alias       alias of the source relation in the query (e.g. 'e'), or none.
-    use_atomic_partition when true (staging models reading atomic.events), also emit a
-                         predicate on atomic's physical partition column so the warehouse
-                         can prune. Set snowplow__partition_tstamp to the column atomic is
-                         actually partitioned by (often collector_tstamp) and
-                         snowplow__partition_tstamp_type to that column's type, so the
-                         bounds are emitted in a matching type -- required for pruning to
-                         engage. The partition column itself is never wrapped in a cast,
-                         which would defeat pruning; only the literal bounds are typed.
+    relation_alias        alias of the source relation in the query (e.g. 'e'), or none.
+    use_atomic_partition  also emit a predicate on atomic's physical partition column so the
+                          warehouse can prune. Configure with snowplow__partition_tstamp and
+                          snowplow__partition_tstamp_type.
 
-  Window (day-aligned):
-    lower = watermark day - (lookback_days - 1)   re-scan overlap for late-arriving data
-    upper = watermark day + (backfill_days + 1)   throttle: N new days processed per run
-
-  On the first run there is no {{ this }}, so the window starts at snowplow__start_date.
-
-  Idempotency: re-running re-reads the lookback overlap, and each model's unique_key
-  upsert makes the re-processed rows a no-op. This is what replaces the manifest's
-  crash-recovery guarantee, and is why every incremental batch is run repeatedly in CI.
-
-  Note: a gap between events larger than snowplow__backfill_limit_days stalls progress,
-  because the window can never reach the next event. Keep the backfill limit comfortably
-  above the largest gap you expect. This was equally true of the manifest framework.
+  Window is watermark - (lookback_days - 1) to watermark + backfill_days + 1. The lookback
+  overlap plus each model's unique_key upsert makes re-running a batch a no-op. A gap between
+  events larger than snowplow__backfill_limit_days stalls progress.
 #}
 
 {% macro get_incremental_filter(relation_alias=none, use_atomic_partition=false) %}
@@ -76,14 +58,10 @@ You may obtain a copy of the Snowplow Personal and Academic License Version 1.0 
 
 
 {#
-  Log the window a model is about to process, so a run's console output answers "what is
-  being processed?" the way the manifest framework's print_run_limits used to.
-
-  The bounds in the predicate are a scalar subquery, so the actual dates are not known at
-  compile time -- this resolves them with one cheap max(load_tstamp) query against the
-  model's own table. Restricted to `dbt run` / `dbt build`: during unit tests
-  is_incremental() is overridden while {{ this }} may not exist, and issuing a query there
-  would break the test rather than inform anyone.
+  Log the window a model is about to process, replacing the manifest framework's
+  print_run_limits. Bounds in the predicate are a subquery, so this resolves the real dates
+  with one max(load_tstamp) query. Restricted to `dbt run` / `dbt build`: during unit tests
+  is_incremental() is overridden while {{ this }} may not exist.
 #}
 
 {% macro log_incremental_window(start_date, lookback, backfill) %}

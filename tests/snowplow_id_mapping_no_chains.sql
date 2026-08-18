@@ -1,10 +1,6 @@
--- Invariant: snowplow_id_mapping must be flat, never chained.
--- If an active_snowplow_id also appears as a snowplow_id, then resolving a child
--- through this table lands on an intermediate rather than the final root.
---
--- snowplow_identities_identifier_mapping resolves exactly one hop, so it depends on
--- this holding. The true_parents filter in snowplow_id_mapping is what
--- guarantees it; this test is the guard.
+-- Invariant: snowplow_id_mapping must be flat, never chained. If an active_snowplow_id also
+-- appears as a snowplow_id, resolving a child lands on an intermediate rather than the final
+-- root, which breaks identifier_mapping's single-hop resolution.
 -- Returns rows that violate the invariant (should return 0).
 
 select

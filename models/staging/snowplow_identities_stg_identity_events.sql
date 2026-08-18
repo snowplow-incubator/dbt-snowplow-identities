@@ -6,13 +6,9 @@ You may obtain a copy of the Snowplow Personal and Academic License Version 1.0 
 #}
 
 {#
-  One row per event carrying the identity context, read straight from atomic.events and
-  self-watermarked off its own max(load_tstamp).
-
-  The configured identifier columns are kept un-pivoted here so that both consumers can
-  derive their own aggregates from this one table: identities at the snowplow_id grain,
-  identifier_mapping_base at the identifier grain. Pivoting here would force one of them
-  to un-pivot again.
+  Events carrying the identity context, read straight from atomic.events. Identifier
+  columns are left un-pivoted so identities and identifier_mapping_base can each derive
+  their own aggregates from one table.
 #}
 
 {{ config(

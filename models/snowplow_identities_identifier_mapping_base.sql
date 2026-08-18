@@ -6,19 +6,9 @@ You may obtain a copy of the Snowplow Personal and Academic License Version 1.0 
 #}
 
 {#
-  The durable store behind snowplow_identities_identifier_mapping. One row per
-  (snowplow_id, id_type, id_value), keyed on an immutable surrogate: id_key never changes,
-  so a merge never rewrites, re-points, or deletes a row here. The only update a row
-  receives is a widening of its first/last seen window when the same identifier is seen
-  again under the same snowplow_id.
-
-  Note (snowplow_id, id_type) is deliberately not unique: one identity can carry several
-  values of the same type (multiple domain_userid cookies, say), and each distinct value
-  gets its own row.
-
-  Query snowplow_identities_identifier_mapping (the view) instead of this table -- it
-  resolves snowplow_id to the current active parent. This table is the raw, event-time
-  record and is not the documented surface.
+  The durable store behind the identifier_mapping view. One row per
+  (snowplow_id, id_type, id_value) under an immutable id_key, so merges never rewrite it.
+  Query the view instead of this table unless you want the raw event-time record.
 #}
 
 {{ config(
@@ -75,8 +65,7 @@ unpivoted as (
     where id is not null
 ),
 
--- Hashing lowers and trims before digesting, so distinct raw values can collapse onto one
--- hash. Aggregating after that keeps id_key unique for the merge below.
+-- Aggregate after hashing: lower/trim can collapse distinct raw values onto one hash.
 ranked as (
     select
         snowplow_id,
@@ -110,12 +99,9 @@ this_run as (
 
 {% if is_incremental() %}
 
--- Widen the seen-at window against the row already stored for this identifier, keeping the
--- app_id and event_id from whichever side actually saw it first/last.
---
--- Joined on the natural key rather than id_key. The two are equivalent -- id_key is a pure
--- function of exactly these three columns -- but joining on the natural key keeps the fold
--- independent of how the surrogate is generated, which is what makes it unit testable.
+-- Widen the seen-at window against the stored row, keeping the app_id and event_id from
+-- whichever side saw it first/last. Joined on the natural key (equivalent to id_key, which
+-- is derived from it) so the fold stays unit testable.
 , folded as (
     select
         n.id_key,

@@ -6,12 +6,8 @@ You may obtain a copy of the Snowplow Personal and Academic License Version 1.0 
 #}
 
 {#
-  Append-only log of identity_merge events, read straight from atomic.events and
-  self-watermarked off its own max(load_tstamp). The lossless record of every merge, and
-  what snowplow_id_mapping resolves current state from.
-
-  Keep this table: it is the only place the raw merged/merges payloads are retained, so it
-  is what any audit or change-log rebuild must be based on (see MIGRATION.md).
+  Append-only log of identity_merge events, read straight from atomic.events. Retains the
+  raw merged/merges payloads, which snowplow_id_mapping resolves current state from.
 #}
 
 {{ config(
@@ -41,10 +37,8 @@ with prep as (
       load_tstamp
     from {{ source('atomic', 'events') }}
     where event_name = 'identity_merge'
+    and app_id = 'snowplow-identities'
     and {{ snowplow_identities.get_incremental_filter(use_atomic_partition=true) }}
-    {%- if var('snowplow__app_id', []) | length > 0 %}
-    and app_id in ({% for aid in var('snowplow__app_id', []) %}'{{ aid }}'{% if not loop.last %}, {% endif %}{% endfor %})
-    {%- endif %}
     qualify row_number() over (partition by event_id order by collector_tstamp) = 1
 )
 

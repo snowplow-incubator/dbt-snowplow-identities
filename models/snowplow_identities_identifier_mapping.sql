@@ -6,21 +6,9 @@ You may obtain a copy of the Snowplow Personal and Academic License Version 1.0 
 #}
 
 {#
-  All identifiers currently linked to an active_snowplow_id -- the documented surface
-  for looking up a person by an external identifier.
-
-  Resolution happens here, at read time: snowplow_identities_identifier_mapping_base
-  holds immutable rows at their event-time snowplow_id, and this view joins them to the
-  current snowplow_id_mapping. Because the join is evaluated on every query, a merge is
-  reflected immediately with no rows rewritten, re-pointed, or deleted upstream.
-
-  Columns and grain are unchanged from previous versions, where this was an incremental
-  table: one row per (active_snowplow_id, id_type, id_value), with `uuid` the surrogate
-  of those three. Consumers need no changes.
-
-  This view resolves one hop. It depends on snowplow_id_mapping holding no chains
-  (an active_snowplow_id never itself appearing as a snowplow_id), which its
-  true_parents filter guarantees and tests/snowplow_id_mapping_no_chains.sql asserts.
+  External identifiers linked to their current active_snowplow_id. Resolves
+  identifier_mapping_base against snowplow_id_mapping at read time, so a merge never
+  rewrites a stored row. One row per (active_snowplow_id, id_type, id_value).
 #}
 
 {{ config(
@@ -44,7 +32,7 @@ with resolved as (
 )
 
 -- Several snowplow_ids can carry the same identifier and resolve to one parent, so
--- collapse to one row per (active_snowplow_id, id_type, id_value) spanning them all.
+-- collapse to one row spanning them all.
 , ranked as (
     select
         active_snowplow_id,

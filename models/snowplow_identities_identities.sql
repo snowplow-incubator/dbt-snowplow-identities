@@ -6,13 +6,9 @@ You may obtain a copy of the Snowplow Personal and Academic License Version 1.0 
 #}
 
 {#
-  One row per snowplow_id: when the identity was created and where it was first and last
-  seen. snowplow_id is the identity at event time -- it may since have been merged, so
-  resolve through snowplow_id_mapping if you need the current parent.
-
-  Per-identifier columns (domain_userid, user_id, ...) are not here. They live in
-  snowplow_identities_identifier_mapping, one row per identifier value, which keeps every
-  value an identity has carried rather than one arbitrary value per identity.
+  One row per snowplow_id: when the identity was created, and where it was first and last
+  seen. snowplow_id is the identity at event time and may since have been merged.
+  Per-identifier values live in identifier_mapping.
 #}
 
 {{ config(
@@ -57,8 +53,8 @@ last_event as (
     ) = 1
 ),
 
--- The model's own watermark advances off this, so it must be the newest load_tstamp seen
--- for the identity in this window, not the one attached to the first or last event.
+-- Newest load_tstamp for the identity, not the first/last event's: the watermark advances
+-- off this.
 load_wm as (
     select snowplow_id, max(load_tstamp) as load_tstamp
     from new_events
