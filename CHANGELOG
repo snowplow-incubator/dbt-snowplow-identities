@@ -43,6 +43,10 @@ Fixed
   duplicate keys for shared identifiers, and the duplicate-uuid MERGE error.
 - An identifier that expires from the identity engine and later reappears under a new
   identity now keeps both rows rather than overwriting the first.
+- `merge_events` no longer applies `snowplow__app_id` to `identity_merge` events. Those are
+  emitted by the identity service under the `snowplow-identities` app_id, so filtering them
+  by a customer's own app ids dropped every merge event and silently stopped identity
+  resolution. They are now always filtered to `snowplow-identities`.
 
 Removed
 - The `snowplow_identities_snowplow_id_mapping_affected` pre-hook snapshot table and the
