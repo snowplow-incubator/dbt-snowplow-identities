@@ -1,5 +1,5 @@
-{# The one aggregation used everywhere identifier_mapping collapses rows that
-   share (active_snowplow_id, id_type, id_value) into a single row: earliest
+{# The one aggregation used everywhere identifier_mapping reduces rows that
+   share (active_snowplow_id, id_type, id_value) to a single row: earliest
    first_seen with its app and event id, latest last_seen with its app, and a
    row_number so the caller keeps one row per group. Kept in one place so the
    orderings cannot drift apart between call sites. #}

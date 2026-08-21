@@ -189,11 +189,16 @@ select * from combined
 -- identifier keeps two rows with two different active_snowplow_ids. The stage
 -- below repairs that. The service always links into the identity with the
 -- earliest created_at, so per identifier the snowplow_id with the earliest
--- created_at in new_identities is the one the service now resolves to. Every
--- row for the identifier is rewritten under that snowplow_id and the old rows
--- are deleted afterwards. ONLY correct when no identifier is configured as
--- unique in the identity service: uniqueness is the one way two separate
--- identities can share an identifier, and this stage would merge them.
+-- created_at in new_identities is the one the service now resolves to. That
+-- snowplow_id must also be the one the identifier was last seen under, which
+-- separates a merge-limit link from a TTL eviction: after a link the oldest
+-- identity keeps receiving the identifier's events, after an eviction the
+-- identifier moves to a new identity and the oldest one is abandoned. When both
+-- conditions hold, every row for the identifier is rewritten under that
+-- snowplow_id and the old rows are deleted afterwards. ONLY correct when no
+-- identifier is configured as unique in the identity service: uniqueness is the
+-- one way two separate identities can share an identifier, and this stage would
+-- merge them.
 
 , mlc_rows as (
     select
@@ -226,7 +231,7 @@ select * from combined
     {% endif %}
 )
 
--- One pass per identifier answers the three questions the stage asks.
+-- One pass per identifier computes the four things the stage needs.
 -- multi: does the identifier have rows under more than one snowplow_id? The
 --   check uses the id as stored, before reading through snowplow_id_mapping,
 --   so a leftover row keyed to an already-merged snowplow_id still counts.
@@ -237,6 +242,9 @@ select * from combined
 --   ordering applies to every identifier, so rows only ever move from a
 --   younger snowplow_id to an older one. Ties fall back to active_snowplow_id
 --   so the pick is always deterministic.
+-- last_seen_snowplow_id: the snowplow_id holding the identifier's latest
+--   last_seen_at. Rows only move when it equals pick_snowplow_id, which is
+--   what separates a link from an eviction, as described above.
 -- One row per snowplow_id, whatever state new_identities is in. Without this,
 -- a duplicate row upstream would fan out through the join below and put two
 -- rows with the same uuid into the MERGE source, which halts the run.
@@ -256,7 +264,12 @@ select * from combined
             partition by r.id_type, r.id_value
             order by ni.created_at asc nulls last, r.active_snowplow_id asc
             rows between unbounded preceding and current row
-        ) as pick_snowplow_id
+        ) as pick_snowplow_id,
+        first_value(r.active_snowplow_id) over (
+            partition by r.id_type, r.id_value
+            order by r.last_seen_at desc, ni.created_at asc nulls last, r.active_snowplow_id asc
+            rows between unbounded preceding and current row
+        ) as last_seen_snowplow_id
     from mlc_rows r
     left join mlc_identity_ages ni
         on r.active_snowplow_id = ni.snowplow_id
@@ -268,7 +281,7 @@ select * from combined
 -- out rewritten and emitted for an identifier we promised to leave alone.
 , mlc_repointed as (
     select
-        case when skipped then raw_snowplow_id
+        case when skipped or pick_snowplow_id != last_seen_snowplow_id then raw_snowplow_id
              else pick_snowplow_id end as active_snowplow_id,
         id_type,
         id_value,
@@ -278,7 +291,8 @@ select * from combined
         last_seen_at,
         first_seen_event_id,
         from_this_run
-            or (not skipped and (resolved_changed or active_snowplow_id != pick_snowplow_id)) as changed
+            or (not skipped and pick_snowplow_id = last_seen_snowplow_id
+                and (resolved_changed or active_snowplow_id != pick_snowplow_id)) as changed
     from mlc_flagged
     where multi
 )
