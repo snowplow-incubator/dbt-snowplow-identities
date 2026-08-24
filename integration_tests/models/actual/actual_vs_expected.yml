@@ -31,10 +31,16 @@ models:
 
   - name: snowplow_identities_identifier_mapping_actual
     tests:
+      # expected rows for runs WITHOUT snowplow__merge_limit_collapse
       - dbt_utils.equality:
           compare_model: ref('snowplow_identities_identifier_mapping_expected_stg')
+          config:
+            tags: ['no_merge_limit_collapse']
       - dbt_utils.equal_rowcount:
           compare_model: ref('snowplow_identities_identifier_mapping_expected_stg')
+          config:
+            tags: ['no_merge_limit_collapse']
+
 
   - name: snowplow_identities_id_mapping_scd_actual
     tests:
@@ -42,3 +48,15 @@ models:
           compare_model: ref('snowplow_identities_id_mapping_scd_expected_stg')
       - dbt_utils.equal_rowcount:
           compare_model: ref('snowplow_identities_id_mapping_scd_expected_stg')
+
+  # expected rows for runs WITH snowplow__merge_limit_collapse
+  - name: snowplow_identities_identifier_mapping_collapse_actual
+    tests:
+      - dbt_utils.equality:
+          compare_model: ref('snowplow_identities_identifier_mapping_expected_collapse_stg')
+          config:
+            tags: ['merge_limit_collapse']
+      - dbt_utils.equal_rowcount:
+          compare_model: ref('snowplow_identities_identifier_mapping_expected_collapse_stg')
+          config:
+            tags: ['merge_limit_collapse']

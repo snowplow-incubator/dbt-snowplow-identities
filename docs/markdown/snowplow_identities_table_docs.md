@@ -55,6 +55,16 @@ Contains all identifiers currently linked to an `active_snowplow_id`. The list o
 This table is useful if you want to perform a lookup of addressable IDs (like email) that can be activated to downstream systems.
 
 Optionally, id_values can be the hashed version of the identifier instead of the raw PII. This can be done by setting var('snowplow__hash_identifiers') to true.
+
+An identifier can appear against more than one `active_snowplow_id`. Usually that is a [unique identifier](https://docs.snowplow.io/docs/identities/concepts/unique-identifiers/) doing its job: it keeps two people apart even when they share a device, so the shared identifier is held by both identities on purpose. Reaching the identity service's merge limit produces the same shape for a different reason. Once an identity holds as many merges as the service allows, further events that would have merged into it are resolved to it directly instead, with no merge event emitted. Those events carry that identity's Snowplow ID from then on, but without a merge event nothing repoints the identifier's earlier row, so the earlier Snowplow ID stays alongside the new one.
+
+Setting var('snowplow__merge_limit_collapse') to true collapses those rows: for each identifier the oldest identity wins, the earlier rows' history is folded into it, and the rest are removed. It is off by default.
+
+**Do not set it if any identifier is configured as unique in the identity service.** This var cannot tell the two cases above apart, and it resolves them by deleting rows. On a pipeline with a unique identifier that attributes one person's activity to another and destroys the row that recorded the difference, with no way to recover it from this table. The var exists for pipelines with no unique identifier configured, where two identities holding one identifier can only mean the merge limit was reached.
+
+Repairs happen the next time an identifier appears in a batch rather than retroactively, so existing rows clear over time; a full refresh from `snowplow__start_date` converges them at once.
+
+Two cases are left alone with the var on. An identifier whose identities have no `created_at` in `snowplow_identities_new_identities` cannot be ordered by age, so it waits until one does. An identifier whose most recent activity sits under a younger identity is not collapsed either, because that is what a TTL eviction looks like: the identifier was evicted from the older identity and now belongs to a newer one, and both rows are real history.
 {% enddocs %}
 
 
