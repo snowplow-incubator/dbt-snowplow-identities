@@ -5,44 +5,45 @@
 
 # snowplow-identities
 
-A dbt package for building robust incremental identity resolution models from Snowplow data. Processes identity merge events to maintain mappings between user identifiers and canonical Snowplow IDs, with full audit history of identity lifecycle changes.
+A dbt package that resolves Snowplow identities. It reads the identity context and
+`identity_merge` events from `atomic.events`, then keeps track of which Snowplow IDs belong to
+the same person after merges, and which of your own identifiers point at them.
 
-## Features
-
-- **Identity Resolution**: Maps all child snowplow_ids to their current active parent after merges
-- **Identifier Mapping**: Links external identifiers (domain_userid, user_id, etc.) to canonical Snowplow IDs
-- **Audit Trail**: Complete history of identity creation and merge events
-- **Incremental Processing**: Efficient delta updates using Snowplow's incremental framework
-- **Multi-Warehouse**: Optimized for BigQuery and Snowflake with extensibility for other platforms
-
-## Core Models
+## Models
 
 | Model | Description |
 |-------|-------------|
-| `snowplow_identities_snowplow_id_mapping` | Current child → parent ID mappings |
-| `snowplow_identities_snowplow_id_mapping_snapshot` | SCD Type 2 history of ID mapping changes with valid_from/valid_to timestamps |
-| `snowplow_identities_identifier_mapping` | External identifiers → active Snowplow ID lookup |
-| `snowplow_identities_id_changes` | Audit log of all identity lifecycle events |
-| `snowplow_identities_merge_events` | History of identity merge operations |
+| `snowplow_identities_snowplow_id_mapping` | Each child `snowplow_id` and the active parent it now resolves to. Join your events here to get one ID per person. |
+| `snowplow_identities_identifier_mapping` | Your identifiers, such as `domain_userid` and `user_id`, against the `active_snowplow_id` that currently owns them. A view, resolved at read time. |
+| `snowplow_identities_identities` | One row per `snowplow_id`, with when it was created and where it was first and last seen. |
+| `snowplow_identities_merge_events` | The `identity_merge` event log, keeping the raw merge payloads. |
 
+Two more models support these. `snowplow_identities_identifier_mapping_base` is the table the
+`identifier_mapping` view resolves against, and `snowplow_identities_stg_identity_events` holds
+the identity context events read from `atomic.events`.
 
 Please refer to the [doc site](https://docs.snowplow.io/docs/modeling-your-data/modeling-your-data-with-dbt/dbt-models/dbt-identities-data-model/) for a full breakdown of the package.
 
-Please note that this data model is under the Snowplow Personal & Academic License (SPAL). For further details please refer to our [documenation site](https://docs.snowplow.io/docs/contributing/personal-and-academic-license-faq/).
+Please note that this data model is under the Snowplow Personal & Academic License (SPAL). For
+further details please refer to our [documentation site](https://docs.snowplow.io/docs/contributing/personal-and-academic-license-faq/).
 
-### Getting Started
+### Getting started
 
 The easiest way to get started is to follow our [QuickStart guide](https://docs.snowplow.io/docs/modeling-your-data/modeling-your-data-with-dbt/dbt-quickstart/identities/).
 
-### Adapter Support
+Upgrading from 0.1.0 is a breaking change. See [MIGRATION.md](MIGRATION.md) for the steps and
+for recipes rebuilding the tables this release removes.
 
-The current version of the snowplow-identities package supports BigQuery.
+### Adapter support
+
+BigQuery and Snowflake.
 
 ### Requirements
 
-- A dataset of web events from the [Snowplow JavaScript tracker][tracker-docs] must be available in the database.
-- Have the [`identity` context][identity-context] enabled.
-- dbt-core version 1.6.0 or greater
+- Events carrying the `com.snowplowanalytics.snowplow/identity` context, version 2, available
+  in your warehouse.
+- dbt-core 1.10.6 or greater.
+- `snowplow_utils` 1.0.1 or greater, which `dbt deps` installs for you.
 
 # Copyright and license
 

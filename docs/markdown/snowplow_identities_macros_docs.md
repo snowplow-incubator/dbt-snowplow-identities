@@ -17,5 +17,5 @@ Each model asks its own table for the newest `load_tstamp` it already holds and 
 
 The window re-scans `snowplow__lookback_days` of overlap for late-arriving data; combined with each model's `unique_key` upsert, that makes re-running a batch a no-op, which is what replaces the manifest's crash-recovery guarantee.
 
-Progress is throttled to `snowplow__backfill_limit_days` new days per run. A gap between events larger than that stalls progress, because the window can never reach the next event — keep the limit comfortably above the largest gap you expect.
+Progress is throttled to `snowplow__backfill_limit_days` new days per run. A gap between events larger than that stalls progress, because the window can never reach the next event. Keep the limit comfortably above the largest gap you expect.
 {% enddocs %}

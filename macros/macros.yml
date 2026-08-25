@@ -14,11 +14,19 @@ macros:
         type: string
         description: Alias of the source relation in the query (e.g. 'e'), or none if the query does not alias it.
       - name: use_atomic_partition
-        type: boolean
+        type: bool
         description: >
           Set true for staging models reading atomic.events, to also emit a predicate on
           atomic's physical partition column so the warehouse can prune. Configure with
           snowplow__partition_tstamp and snowplow__partition_tstamp_type.
+      - name: anchor
+        type: bool
+        description: >
+          Extend the window's upper bound to snowplow_identities_stg_identity_events'
+          watermark when the model's own is behind it. Leave true for every model except
+          stg_identity_events itself, which is the anchor. Without it a model whose events
+          are sparser than snowplow__backfill_limit_days strands itself, since an empty
+          window leaves its watermark, and therefore the window, unchanged.
   - name: extract_merged
     description: >
       Flattens the cumulative `merged` array of a merge-events relation into one row per

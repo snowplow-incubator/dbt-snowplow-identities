@@ -13,13 +13,15 @@ You may obtain a copy of the Snowplow Personal and Academic License Version 1.0 
     use_atomic_partition  also emit a predicate on atomic's physical partition column so the
                           warehouse can prune. Configure with snowplow__partition_tstamp and
                           snowplow__partition_tstamp_type.
+    anchor                extend the upper bound to stg_identity_events' watermark. True
+                          for every model except stg_identity_events itself.
 
-  Window is watermark - (lookback_days - 1) to watermark + backfill_days + 1. The lookback
-  overlap plus each model's unique_key upsert makes re-running a batch a no-op. A gap between
-  events larger than snowplow__backfill_limit_days stalls progress.
+  Window is watermark - (lookback_days - 1) to the later of watermark + backfill_days + 1
+  and the anchor's watermark. The lookback overlap plus each model's unique_key upsert
+  makes re-running a batch a no-op.
 #}
 
-{% macro get_incremental_filter(relation_alias=none, use_atomic_partition=false) %}
+{% macro get_incremental_filter(relation_alias=none, use_atomic_partition=false, anchor=true) %}
   {%- set alias = (relation_alias ~ '.') if relation_alias is not none else '' -%}
   {%- set start_date = var('snowplow__start_date') -%}
   {%- set lookback = var('snowplow__lookback_days', 1) -%}
@@ -29,6 +31,9 @@ You may obtain a copy of the Snowplow Personal and Academic License Version 1.0 
   {%- set partition_buffer = var('snowplow__partition_buffer_days', 2) -%}
   {%- set start_ts = "cast('" ~ start_date ~ "' as timestamp)" -%}
 
+  {#- Outside the is_incremental() branch so the ref registers as a DAG edge at parse time. -#}
+  {%- set anchor_relation = ref('snowplow_identities_stg_identity_events') if anchor else none -%}
+
   {%- if partition_type not in ['timestamp', 'date'] -%}
     {{ exceptions.raise_compiler_error(
       "snowplow__partition_tstamp_type must be 'timestamp' or 'date', got '" ~ partition_type ~ "'."
@@ -36,12 +41,9 @@ You may obtain a copy of the Snowplow Personal and Academic License Version 1.0 
   {%- endif -%}
 
   {%- if is_incremental() -%}
-    {%- set wm_day -%}
-      (select coalesce(max(cast(load_tstamp as date)), cast({{ start_ts }} as date)) from {{ this }})
-    {%- endset -%}
-    {%- set lower_day = dbt.dateadd('day', 1 - lookback, wm_day) -%}
-    {%- set upper_day = dbt.dateadd('day', 1 + backfill, wm_day) -%}
-    {%- do snowplow_identities.log_incremental_window(start_date, lookback, backfill) -%}
+    {%- set lower_day = dbt.dateadd('day', 1 - lookback, snowplow_identities.watermark_day(this, start_ts)) -%}
+    {%- set upper_day = snowplow_identities.upper_bound_day(this, anchor_relation, start_ts, backfill) -%}
+    {%- do snowplow_identities.log_incremental_window(start_date, lookback, backfill, anchor_relation) -%}
   {%- else -%}
     {%- set lower_day = "cast(" ~ start_ts ~ " as date)" -%}
     {%- set upper_day = dbt.dateadd('day', backfill, "cast(" ~ start_ts ~ " as date)") -%}
@@ -58,26 +60,51 @@ You may obtain a copy of the Snowplow Personal and Academic License Version 1.0 
 
 
 {#
-  Log the window a model is about to process, replacing the manifest framework's
-  print_run_limits. Bounds in the predicate are a subquery, so this resolves the real dates
-  with one max(load_tstamp) query. Restricted to `dbt run` / `dbt build`: during unit tests
-  is_incremental() is overridden while {{ this }} may not exist.
+  Newest load_tstamp day held by a relation, falling back to snowplow__start_date when empty.
 #}
 
-{% macro log_incremental_window(start_date, lookback, backfill) %}
+{% macro watermark_day(relation, start_ts) %}
+  {%- set sql -%}
+    (select coalesce(max(cast(load_tstamp as date)), cast({{ start_ts }} as date)) from {{ relation }})
+  {%- endset -%}
+  {{ return(sql) }}
+{% endmacro %}
+
+
+{#
+  Upper bound of the window: the later of the model's own watermark + backfill_limit_days
+  and the anchor's watermark.
+#}
+
+{% macro upper_bound_day(relation, anchor_relation, start_ts, backfill) %}
+  {%- set own = dbt.dateadd('day', 1 + backfill, snowplow_identities.watermark_day(relation, start_ts)) -%}
+  {%- if anchor_relation is none -%}
+    {{ return(own) }}
+  {%- endif -%}
+  {%- set anchored = dbt.dateadd('day', 1, snowplow_identities.watermark_day(anchor_relation, start_ts)) -%}
+  {{ return('greatest(' ~ own ~ ', ' ~ anchored ~ ')') }}
+{% endmacro %}
+
+
+{#
+  Log the window a model is about to process, replacing the manifest framework's
+  print_run_limits. Bounds in the predicate are subqueries, so this resolves the real dates
+  with one query. Restricted to `dbt run` / `dbt build`: during unit tests is_incremental() is
+  overridden while {{ this }} may not exist.
+#}
+
+{% macro log_incremental_window(start_date, lookback, backfill, anchor_relation=none) %}
   {%- if not execute -%}{{ return('') }}{%- endif -%}
   {%- set which = flags.WHICH | default('', true) -%}
   {%- if which not in ['run', 'build'] -%}{{ return('') }}{%- endif -%}
 
   {%- set start_ts = "cast('" ~ start_date ~ "' as timestamp)" -%}
-  {%- set wm_day -%}
-    (select coalesce(max(cast(load_tstamp as date)), cast({{ start_ts }} as date)) from {{ this }})
-  {%- endset -%}
+  {%- set wm_day = snowplow_identities.watermark_day(this, start_ts) -%}
 
   {%- set query -%}
     select
       cast({{ dbt.dateadd('day', 1 - lookback, wm_day) }} as {{ dbt.type_string() }}) as lower_bound,
-      cast({{ dbt.dateadd('day', 1 + backfill, wm_day) }} as {{ dbt.type_string() }}) as upper_bound,
+      cast({{ snowplow_identities.upper_bound_day(this, anchor_relation, start_ts, backfill) }} as {{ dbt.type_string() }}) as upper_bound,
       cast({{ wm_day }} as {{ dbt.type_string() }}) as watermark
   {%- endset -%}
 

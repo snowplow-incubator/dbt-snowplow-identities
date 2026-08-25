@@ -16,20 +16,20 @@ The package resolves Snowplow identities into a single view of a person, in two 
 
 **Staging** reads `atomic.events` directly:
 
-- `snowplow_identities_stg_identity_events` — one row per event carrying the identity context, with the configured identifier columns kept un-pivoted.
-- `snowplow_identities_merge_events` — an append-only log of every `identity_merge` event. This is also a derived output: it is the only place the raw merge payloads are retained.
+- `snowplow_identities_stg_identity_events`. One row per event carrying the identity context, with the configured identifier columns kept un-pivoted.
+- `snowplow_identities_merge_events`. An append-only log of every `identity_merge` event, and also a derived output, since it is the only place the raw merge payloads are retained.
 
 **Derived** is the customer surface:
 
-- `snowplow_identities_snowplow_id_mapping` — current child to active-parent mapping. Join your events' `snowplow_id` here to resolve them to one unified identity.
-- `snowplow_identities_identifier_mapping` — a view listing every external identifier against its current `active_snowplow_id`. Use this to look up a person by email or user ID for activation downstream.
-- `snowplow_identities_identities` — one row per identity: when it was created, and where it was first and last seen.
+- `snowplow_identities_snowplow_id_mapping`. Current child to active-parent mapping. Join your events' `snowplow_id` here to resolve them to one unified identity.
+- `snowplow_identities_identifier_mapping`. A view listing every external identifier against its current `active_snowplow_id`. Use this to look up a person by email or user ID for activation downstream.
+- `snowplow_identities_identities`. One row per identity, with when it was created and where it was first and last seen.
 
 Two design choices are worth knowing about.
 
 *Resolution happens at read time.* `identifier_mapping` is a view over `snowplow_identities_identifier_mapping_base`, whose rows are keyed on an immutable surrogate and never rewritten. A merge is reflected the moment `snowplow_id_mapping` updates, and an identifier that expires and later reappears under a new identity keeps both records.
 
-*Each model tracks its own progress.* Every model asks its own table for the newest `load_tstamp` it holds and processes forward from there, in windows of `snowplow__backfill_limit_days`. There is no manifest and no run hooks, so a failed run leaves the affected model slightly behind and it catches up on the next one. Each run logs the window it is processing, and the `snowplow_id_models_in_sync` test flags a model that has fallen further behind than expected.
+*Each model tracks its own progress.* Every model asks its own table for the newest `load_tstamp` it holds and processes forward from there, in windows of at least `snowplow__backfill_limit_days`. There is no manifest and no run hooks, so a failed run leaves the affected model slightly behind and it catches up on the next one. Models whose events are sparse, such as `merge_events`, extend their window to `snowplow_identities_stg_identity_events`' watermark so an empty window cannot strand them. Each run logs the window it is processing.
 
 ## Installation
 

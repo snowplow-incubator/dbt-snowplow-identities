@@ -25,8 +25,7 @@ You may obtain a copy of the Snowplow Personal and Academic License Version 1.0 
     tblproperties={
       'delta.autoOptimize.optimizeWrite' : 'true',
       'delta.autoOptimize.autoCompact' : 'true'
-    },
-    meta={'upsert_date_key': 'load_tstamp', 'snowplow_optimize': true}
+    }
 ) }}
 
 {% set identifiers = var('snowplow__identifiers', [{'reference': 'domain_userid', 'alias': 'domain_userid'}, {'reference': 'user_id', 'alias': 'user_id'}]) %}

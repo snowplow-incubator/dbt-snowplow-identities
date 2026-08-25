@@ -2,29 +2,28 @@
 
 ## Upgrading to 0.2.0
 
-This release removes two output tables, renames a third, and changes how
-`snowplow_identities_identifier_mapping` is built. **The table most people query —
-`snowplow_identities_identifier_mapping` — keeps its name, columns, and grain, so most
-consumers need no changes at all.**
+This release removes two output tables, renames a third, and rebuilds
+`snowplow_identities_identifier_mapping` as a view. That view keeps the old name, columns and
+grain, so most consumers need no changes.
 
 ### What changed
 
 | Table | Change | Action needed |
 | --- | --- | --- |
-| `snowplow_identities_snowplow_id_mapping` | None | None |
-| `snowplow_identities_merge_events` | None | None |
+| `snowplow_identities_snowplow_id_mapping` | Same grain and values. Gains `merge_event_id`, `triggering_event_id` and `load_tstamp`; now partitioned on `load_tstamp` rather than `merged_at` | Drop the table first; see [Tables you must drop before the first run](#tables-you-must-drop-before-the-first-run) |
+| `snowplow_identities_merge_events` | Same grain and values. Gains `load_tstamp`; now partitioned on `load_tstamp` rather than `derived_tstamp` | Drop the table first; see [Tables you must drop before the first run](#tables-you-must-drop-before-the-first-run) |
 | `snowplow_identities_identifier_mapping` | Now a **view** over a new table. Same columns, same grain, same values. | None for consumers |
 | `snowplow_identities_new_identities` | Renamed to `snowplow_identities_identities`; per-identifier columns removed | Update references; see [Rebuilding the wide identity row](#rebuilding-the-wide-identity-row) |
 | `snowplow_identities_id_changes` | **Removed** | See [Rebuilding id_changes](#rebuilding-id_changes) |
 | `snowplow_identities_id_mapping_scd` | **Removed** | See [Rebuilding id_mapping_scd](#rebuilding-id_mapping_scd) |
 
-New models you will see appear:
+New models:
 
-- `snowplow_identities_identifier_mapping_base` (`derived`) — the durable table behind the
-  view. You should not need to query it; it holds unresolved, event-time rows.
-- `snowplow_identities_identities` (`derived`) — the renamed `new_identities`.
-- `snowplow_identities_stg_identity_events` (`scratch`) — identity-context events read
-  straight from `atomic.events`, replacing the old base layer.
+- `snowplow_identities_identifier_mapping_base` (`derived`). The table the view resolves at
+  read time. It holds unresolved, event-time rows, so query the view instead.
+- `snowplow_identities_identities` (`derived`). The renamed `new_identities`.
+- `snowplow_identities_stg_identity_events` (`scratch`). Identity context events read from
+  `atomic.events`, replacing the old base layer.
 
 Every derived table also gains a `load_tstamp` column, which is how each model now tracks
 its own progress. See [Each model now tracks its own progress](#each-model-now-tracks-its-own-progress).
@@ -35,7 +34,7 @@ The shared manifest table and the hooks that maintained it are gone. Each model 
 own table for the newest `load_tstamp` it holds and processes forward from there, so a
 failed run leaves that model slightly behind and it catches up on the next one. This
 deletes the manifest, three supporting models, the whole `_this_run` scratch layer, and
-every run hook — 15 models becomes 5 plus a view.
+every run hook. 15 models become 5 plus a view.
 
 Config that no longer exists: `snowplow__allow_refresh`, `snowplow__dev_target_name`,
 and the `models_to_remove` var (all belonged to the manifest). A `--full-refresh` now
@@ -46,16 +45,46 @@ Config that is new:
 | Var | Default | What it does |
 | --- | --- | --- |
 | `snowplow__lookback_days` | 1 | Days of overlap re-scanned each run for late-arriving data. Also the run-twice idempotency window. |
-| `snowplow__max_watermark_drift_days` | 7 | Threshold for the `snowplow_id_models_in_sync` test below. |
 | `snowplow__partition_tstamp` | `load_tstamp` | The column `atomic.events` is physically partitioned by. Set to `collector_tstamp` if that is your partition key, so staging scans still prune. |
 | `snowplow__partition_tstamp_type` | `timestamp` | `timestamp` or `date`, matching the above column's type. |
 | `snowplow__partition_buffer_days` | 2 | Extra days on the prune predicate to absorb collector-to-load lag. |
+
+### Tables you must drop before the first run
+
+`snowplow_id_mapping` and `merge_events` keep their names, grain and values, and every
+column they had before. But both change shape in ways dbt cannot apply to a table that
+already exists, so upgrading in place does not work:
+
+- `load_tstamp` is a new column on both. `on_schema_change: append_new_columns` adds it to
+  the existing rows as `NULL`, and both models now test `load_tstamp` `not_null`. Every
+  pre-upgrade row would fail that test until the backfill in step 3 overwrote it.
+- The partition column changes to `load_tstamp`, from `merged_at` and `derived_tstamp`, because
+  that is the column each model now watermarks and filters on. dbt does not repartition an
+  existing incremental table. Depending on the adapter you either keep the old partitioning
+  and lose pruning on the column the model now scans, or the run fails on the mismatch.
+
+So drop both and let dbt rebuild them:
+
+```sql
+drop table if exists <derived_schema>.snowplow_identities_snowplow_id_mapping;
+drop table if exists <derived_schema>.snowplow_identities_merge_events;
+```
+
+Nothing is lost. Both are rebuilt from `atomic.events` by the backfill in step 3, which
+replays from `snowplow__start_date` anyway.
+
+`identifier_mapping` needs no manual step, because dbt replaces the old table with the view.
+`new_identities` is superseded by `identities`, so the old table is left behind for you to
+drop in step 4.
 
 ### Upgrade steps
 
 1. **Bump the package version** in your `packages.yml`.
 
-2. **Expect one backfill.** Every derived model now carries a `load_tstamp` column that
+2. **Drop `snowplow_id_mapping` and `merge_events`**, per
+   [Tables you must drop before the first run](#tables-you-must-drop-before-the-first-run).
+
+3. **Expect one backfill.** Every derived model now carries a `load_tstamp` column that
    did not exist before, so on the first run each model's watermark resolves to
    `snowplow__start_date` and history is replayed from there, advancing
    `snowplow__backfill_limit_days` per run. With the default 30-day limit and a start
@@ -72,9 +101,9 @@ Config that is new:
    ```
 
    Until the backfill completes, the tables only cover the period processed so far.
-   Nothing is lost — every row is rebuilt from `atomic.events`.
+   Nothing is lost. Every row is rebuilt from `atomic.events`.
 
-3. **Drop the old tables** once you are happy, since dbt no longer manages them:
+4. **Drop the old tables** once you are happy, since dbt no longer manages them:
 
    ```sql
    -- removed outputs
@@ -98,32 +127,40 @@ Config that is new:
    dbt replaces the old `identifier_mapping` table with the view automatically, so that
    one needs no manual step.
 
-### Set snowplow__backfill_limit_days above your largest gap
+### Sparse event streams no longer stall a model
 
-A model's window can only advance if it finds data in it, so a gap between events larger
-than `snowplow__backfill_limit_days` stalls that model permanently. This was equally true
-of the manifest framework, but one case is worth calling out because it is easy to miss:
+A model's window can only advance if it finds data in it. Left alone, a gap between events
+longer than `snowplow__backfill_limit_days` would strand a model. The window comes back empty,
+the watermark does not move, and the next run recomputes the same window. This mattered most
+for `merge_events` and `snowplow_id_mapping`, which advance off `identity_merge` events only.
+Those are far sparser than identity events, and often more than a day apart.
 
-**`merge_events` and `snowplow_id_mapping` advance off `identity_merge` events only**,
-which are far sparser than identity events. If your pipeline sees a merge every few days
-but you have set `snowplow__backfill_limit_days: 1`, those two models will stall while the
-others keep moving. Size the limit against your quietest event stream, not your busiest.
-The `snowplow_id_models_in_sync` test below is what tells you this has happened.
+Identity context events are dense, so `snowplow_identities_stg_identity_events` always has
+current data. Every other model uses its watermark as an anchor:
 
-### Two new observability tools
+- The lower bound is always the model's own watermark, so a model that errors re-scans its
+  last window rather than skipping it. The manifest gave you that by taking the minimum across
+  models.
+- The upper bound is whichever is further ahead, its own watermark plus
+  `snowplow__backfill_limit_days`, or the anchor's watermark. A merge landing anywhere after
+  the model's watermark is inside the window.
 
-Both are things the manifest gave you implicitly and self-watermarking otherwise would not.
+Two things follow. `snowplow__backfill_limit_days` becomes a floor rather than a cap for a
+model sitting behind the anchor, though it still paces the anchor itself, so backfills stay
+throttled. And between merges `merge_events` scans a widening range, from your last merge up
+to where staging has reached. That scan is pruned on `load_tstamp` and `event_name`, which
+`atomic.events` is usually partitioned or clustered on, and it collapses as soon as a merge
+lands.
 
-**Run-window logging.** Every model logs its watermark and the window it is about to
-process, replacing the old `print_run_limits` output. In normal operation all five models
-report the same window; during a backfill they legitimately differ.
+One case this does not cover. If `snowplow__start_date` is well before your data begins, the
+anchor's own first window is empty and it stalls too. The manifest framework did the same, so
+this is not new, but set `snowplow__start_date` near the start of your data.
 
-**`snowplow_id_models_in_sync`.** A test that fails when any model's watermark trails the
-furthest-ahead model by more than `snowplow__max_watermark_drift_days`, naming the lagging
-model. Without a shared manifest nothing else notices a model that has quietly fallen
-behind — it does self-heal, but you would not know it had happened. Keep the threshold
-comfortably above `snowplow__backfill_limit_days`, since models advance independently and
-some drift during a backfill is expected, not a fault.
+### Run-window logging
+
+Every model logs its watermark and the window it is about to process, replacing the old
+`print_run_limits` output. In normal operation all five models report the same window; during
+a backfill, or where one model is catching up behind the anchor, they legitimately differ.
 
 ---
 
@@ -131,9 +168,9 @@ some drift during a backfill is expected, not a fault.
 
 Previously, a merge physically rewrote identifier rows to point at the winning
 identity, then deleted the leftovers via a post-hook. That approach caused a recurring
-class of bug — stale rows after cascading merges, duplicate keys when one identifier
-was shared across identities, and a `MERGE` failure when two re-pointed rows collapsed
-onto one key.
+class of bug: stale rows after cascading merges, duplicate keys when one identifier was
+shared across identities, and a `MERGE` failure when two re-pointed rows collapsed onto one
+key.
 
 Now `identifier_mapping_base` stores one row per `(snowplow_id, id_type, id_value)`
 under an immutable key that never changes, and the view resolves each row to its
@@ -156,7 +193,7 @@ Two consequences worth knowing:
   both rows are kept in `identifier_mapping_base`. Previously the second sighting
   overwrote the first. The view still shows one row per
   `(active_snowplow_id, id_type, id_value)`, so this only surfaces if the two identities
-  have not merged — in which case you will correctly see two owners.
+  have not merged, in which case you correctly see two owners.
 
 ---
 
@@ -188,9 +225,9 @@ left join identifiers x
     on coalesce(m.active_snowplow_id, i.snowplow_id) = x.active_snowplow_id
 ```
 
-Note the `max()`: where an identity carries several values of one type, this picks one
-arbitrarily, which is exactly the lossiness that motivated removing these columns.
-Prefer joining `identifier_mapping` directly at the identifier grain if you can.
+The `max()` matters. Where an identity carries several values of one type it picks one
+arbitrarily, which is the lossiness that motivated removing these columns. Join
+`identifier_mapping` at the identifier grain instead where you can.
 
 ---
 
@@ -283,33 +320,26 @@ select
 from combined
 ```
 
-A child legitimately appears under more than one parent when merges cascade — first
-under an intermediate, later under the final root. Both edges are real changes, so both
-get a row; that is what makes this a change *log* rather than a current-state mapping.
-For current state, use `snowplow_id_mapping`.
+A child legitimately appears under more than one parent when merges cascade, first under an
+intermediate and later under the final root. Both edges are real changes, so both get a row.
+That is what makes this a change log rather than a current-state mapping. For current state,
+use `snowplow_id_mapping`.
 
 ### Verified against the removed model
 
-Run against the package's integration fixtures, this recipe produces the same 150 rows
-as the deleted table — the same 87 `created` and 63 `merged` edges, with the same
-`snowplow_id`, `previous_snowplow_id`, `change_type`, `first_seen_event_id` and
-`first_seen_app_id` throughout. Without the `qualify`, the cumulative arrays inflate
-`merged` from 63 to 104.
+Run against the package's integration fixtures, this recipe produces the same 150 rows as
+the deleted table, with the same `snowplow_id`, `previous_snowplow_id`, `change_type`,
+`first_seen_event_id` and `first_seen_app_id`. Without the `qualify`, the cumulative arrays
+inflate `merged` from 63 rows to 104.
 
-**One known difference.** On 9 of the 63 `merged` rows — all of them cascading merges —
-`effective_at` differs. This recipe uses the engine's own `merged_at` for the edge, so a
-child re-rooted by a later merge keeps the timestamp of when it was originally merged.
-The removed model instead stamped such an edge with the time of the *later* merge that
-re-rooted it, a value it reconstructed from an internal pre-run snapshot table that no
-longer exists. Neither is wrong, they answer different questions: "when was this child
-merged" versus "when did it start pointing at this particular root".
-
-If you need the second reading, note that no simple rule over the merge log reproduces
-it: taking the earliest or latest `merged_at` per edge each leaves 9 rows different, the
-merge event's own `derived_tstamp` leaves 63, and the top-level merge time of the first
-event listing the edge leaves 6. Reconstructing it exactly means tracking root changes
-run over run, which is the complexity the removal was meant to shed. For current state
-rather than history, `snowplow_id_mapping` already has the answer.
+One known difference. On 9 of the 63 `merged` rows, all of them cascading merges,
+`effective_at` differs. This recipe uses the engine's own `merged_at`, so a child re-rooted by
+a later merge keeps the timestamp of when it was first merged. The removed model stamped it
+with the time of the later merge instead, using an internal snapshot table that no longer
+exists. They answer different questions, "when was this child merged" against "when did it
+start pointing at this root". If you need the second reading, `snowplow_id_mapping` already
+has current state, and reproducing the history exactly means tracking root changes run over
+run.
 
 ---
 
@@ -374,5 +404,5 @@ where scd.effective_at <= :as_of_timestamp
 Materialized as a table rather than incrementally, because `superseded_at` and
 `is_current` on existing rows change when a new merge arrives. If that gets expensive,
 make it incremental on `scd_key` and restrict `changes` to `snowplow_id`s touched in the
-current batch — that is what the removed model did, and it was the most complex model in
-the package.
+current batch. That is what the removed model did, and it was the most complex model in the
+package.

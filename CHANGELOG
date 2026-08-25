@@ -3,54 +3,54 @@ snowplow-identities 0.2.0 (2026-YY-ZZ)
 See MIGRATION.md for upgrade steps and rebuild recipes for the removed tables.
 
 Breaking changes
-- `snowplow_identities_id_changes` removed. Rebuild recipe in MIGRATION.md.
-- `snowplow_identities_id_mapping_scd` removed. Rebuild recipe in MIGRATION.md.
-- `snowplow_identities_new_identities` renamed to `snowplow_identities_identities`,
-  and its per-identifier columns (domain_userid, user_id, ...) removed. Those values
-  live in `snowplow_identities_identifier_mapping` at the identifier grain, which keeps
-  every value an identity has carried instead of collapsing to one per type.
+- `snowplow_identities_id_changes` removed.
+- `snowplow_identities_id_mapping_scd` removed.
+- `snowplow_identities_new_identities` renamed to `snowplow_identities_identities`, and its
+  per-identifier columns removed. Those values live in
+  `snowplow_identities_identifier_mapping` at the identifier grain.
+- `snowplow_identities_snowplow_id_mapping` and `snowplow_identities_merge_events` gain a
+  `load_tstamp` column and are now partitioned on it. Drop both before the first run.
+- `snowplow__allow_refresh`, `snowplow__dev_target_name` and the `models_to_remove` var are
+  removed with the manifest. `--full-refresh` now rebuilds from `snowplow__start_date`.
 
 Changed
 - `snowplow_identities_identifier_mapping` is now a view over the new
-  `snowplow_identities_identifier_mapping_base` table, resolving each row to its current
-  `active_snowplow_id` at read time. Columns, grain and values are unchanged, so
-  consumers need no changes.
-- Each model now tracks its own progress off its own `max(load_tstamp)` instead of a
-  shared manifest. This retires the manifest table, the base layer, the whole `_this_run`
-  scratch layer and every run hook: 15 models become 5 plus a view, and every dependency
-  is a real `ref()` visible in the dbt lineage graph. All derived tables gain a
-  `load_tstamp` column, so upgrading replays history once from `snowplow__start_date`.
-- `snowplow__allow_refresh`, `snowplow__dev_target_name` and the `models_to_remove` var
-  are removed with the manifest. `--full-refresh` now just rebuilds from
-  `snowplow__start_date`.
+  `snowplow_identities_identifier_mapping_base` table, resolved to the current
+  `active_snowplow_id` at read time. Columns, grain and values are unchanged.
+- Each model tracks its own progress off its own `max(load_tstamp)` instead of a shared
+  manifest, retiring the manifest, the base layer, the `_this_run` scratch layer and every
+  run hook. 15 models become 5 plus a view, and every dependency is a real `ref()`.
+- Every model except `snowplow_identities_stg_identity_events` extends its window's upper
+  bound to that model's watermark when its own is behind, so a sparse event stream cannot
+  strand a model.
+- `snowplow_identities_stg_identity_events` replaces whole days instead of matching every
+  `event_id`. BigQuery uses `insert_overwrite` with `copy_partitions`, Snowflake uses
+  `delete+insert` keyed on the load date. The window is day-aligned, so this is equivalent to
+  the upsert and takes the per-event key matching out of every run.
 
 Added
-- Run-window logging. Every model logs its watermark and the window it is processing,
-  replacing the manifest framework's `print_run_limits` output.
-- `snowplow_id_models_in_sync` test, failing when any model's watermark trails the
-  furthest-ahead model by more than `snowplow__max_watermark_drift_days` (default 7).
-  Without a shared manifest nothing else surfaces a model that has quietly fallen behind.
+- Run-window logging, replacing the manifest framework's `print_run_limits`.
 - `snowplow__lookback_days` (default 1), the overlap re-scanned each run for late-arriving
-  data and the window over which re-running a batch is a no-op.
+  data.
 - `snowplow__partition_tstamp`, `snowplow__partition_tstamp_type` and
-  `snowplow__partition_buffer_days`, so staging scans prune correctly when
-  `atomic.events` is partitioned on something other than `load_tstamp`.
+  `snowplow__partition_buffer_days`, for when `atomic.events` is partitioned on something
+  other than `load_tstamp`.
 
 Fixed
-- Merges no longer rewrite, re-point or delete identifier rows. `identifier_mapping_base`
-  is keyed on an immutable surrogate of (snowplow_id, id_type, id_value), which makes the
-  recurring re-pointing failures unrepresentable: stale rows after cascading merges,
-  duplicate keys for shared identifiers, and the duplicate-uuid MERGE error.
-- An identifier that expires from the identity engine and later reappears under a new
-  identity now keeps both rows rather than overwriting the first.
-- `merge_events` no longer applies `snowplow__app_id` to `identity_merge` events. Those are
-  emitted by the identity service under the `snowplow-identities` app_id, so filtering them
-  by a customer's own app ids dropped every merge event and silently stopped identity
-  resolution. They are now always filtered to `snowplow-identities`.
+- Merges no longer rewrite, re-point or delete identifier rows.
+  `snowplow_identities_identifier_mapping_base` is keyed on an immutable surrogate of
+  (snowplow_id, id_type, id_value).
+- An identifier that later reappears under a new identity keeps both rows rather than
+  overwriting the first.
+- Keys untouched for longer than `snowplow__upsert_lookback_days` no longer duplicate on
+  upsert. `snowplow_optimize` is off on `identities`, `identifier_mapping_base` and
+  `snowplow_id_mapping`.
+- `identity_merge` events are filtered to the `snowplow-identities` app_id rather than
+  `snowplow__app_id`, which dropped every merge event when set.
 
 Removed
 - The `snowplow_identities_snowplow_id_mapping_affected` pre-hook snapshot table and the
-  `snowplow_identities_internal` source that read it without a DAG edge.
+  `snowplow_identities_internal` source that read it.
 - The `delete_stale_identifier_mapping_rows` macro and its post-hook.
 
 snowplow-identities 0.1.0 (2026-YY-ZZ)

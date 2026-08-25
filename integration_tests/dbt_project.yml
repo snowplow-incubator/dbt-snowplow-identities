@@ -31,7 +31,6 @@ models:
   snowplow_identities_integration_tests:
     +materialized: table
     +schema: "snplw_identities_int_tests"
-    +source:
     +bind: false
 vars:
   snowplow_identities:

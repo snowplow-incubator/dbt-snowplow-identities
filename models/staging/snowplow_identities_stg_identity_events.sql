@@ -13,12 +13,16 @@ You may obtain a copy of the Snowplow Personal and Academic License Version 1.0 
 
 {{ config(
     materialized="incremental",
+    incremental_strategy=snowplow_utils.get_value_by_target_type(
+      bigquery_val='insert_overwrite', snowflake_val='delete+insert', databricks_val='insert_overwrite'),
     on_schema_change="append_new_columns",
-    unique_key="event_id",
+    unique_key=snowplow_utils.get_value_by_target_type(snowflake_val='cast(load_tstamp as date)'),
     sql_header=snowplow_utils.set_query_tag(var('snowplow__query_tag', 'snowplow_dbt')),
     partition_by=snowplow_utils.get_value_by_target_type(bigquery_val = {
       "field": "load_tstamp",
-      "data_type": "timestamp"
+      "data_type": "timestamp",
+      "granularity": "day",
+      "copy_partitions": true
     }, databricks_val='load_tstamp_date'),
     cluster_by=snowplow_identities.get_cluster_by_values('stg_identity_events'),
     tags=["staging"],
@@ -56,7 +60,7 @@ with prep as (
     {% else %}
         contexts_com_snowplowanalytics_snowplow_identity_2 is not null
     {% endif %}
-    and {{ snowplow_identities.get_incremental_filter(use_atomic_partition=true) }}
+    and {{ snowplow_identities.get_incremental_filter(use_atomic_partition=true, anchor=false) }}
     {%- if var('snowplow__app_id', []) | length > 0 %}
     and app_id in ({% for aid in var('snowplow__app_id', []) %}'{{ aid }}'{% if not loop.last %}, {% endif %}{% endfor %})
     {%- endif %}
