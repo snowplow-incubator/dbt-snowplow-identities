@@ -14,8 +14,6 @@ unit_tests:
     description: >
       First run: sp_BBBB is merged into sp_AAAA. The table should contain the mapping.
     model: snowplow_identities_snowplow_id_mapping
-    config:
-      tags: ["snowflake_only"]
     overrides:
       macros:
         is_incremental: false
@@ -29,10 +27,10 @@ unit_tests:
           select
             'mev-001' as merge_event_id,
             'sp_AAAA' as active_snowplow_id,
-            parse_json('[{"snowplow_id":"sp_BBBB","merged_at":"2025-12-18 10:02:00","triggering_event_id":"evt-001"}]') as merged,
-            '2025-12-18 10:02:00.000'::timestamp as collector_tstamp,
-            '2025-12-18 10:02:00.000'::timestamp as derived_tstamp,
-            '2025-12-18 11:00:00.000'::timestamp as load_tstamp
+            {% if target.type == 'bigquery' %}[struct(cast(null as timestamp) as created_at, timestamp '2025-12-18 10:02:00' as merged_at, 'sp_BBBB' as snowplow_id, 'evt-001' as triggering_event_id)]{% else %}parse_json('[{"snowplow_id":"sp_BBBB","merged_at":"2025-12-18 10:02:00","triggering_event_id":"evt-001"}]'){% endif %} as merged,
+            cast('2025-12-18 10:02:00.000' as timestamp) as collector_tstamp,
+            cast('2025-12-18 10:02:00.000' as timestamp) as derived_tstamp,
+            cast('2025-12-18 11:00:00.000' as timestamp) as load_tstamp
       - input: ref('snowplow_identities_stg_identity_events')
         rows: []
     expect:
@@ -47,8 +45,6 @@ unit_tests:
       at it and map both sp_AAAA and sp_BBBB to sp_CCCC. Getting this wrong is what leaves
       an intermediate parent in the table and breaks single-hop resolution.
     model: snowplow_identities_snowplow_id_mapping
-    config:
-      tags: ["snowflake_only"]
     overrides:
       macros:
         is_incremental: false
@@ -62,18 +58,18 @@ unit_tests:
           select
             'mev-001' as merge_event_id,
             'sp_AAAA' as active_snowplow_id,
-            parse_json('[{"snowplow_id":"sp_BBBB","merged_at":"2025-12-18 10:02:00","triggering_event_id":"evt-001"}]') as merged,
-            '2025-12-18 10:02:00.000'::timestamp as collector_tstamp,
-            '2025-12-18 10:02:00.000'::timestamp as derived_tstamp,
-            '2025-12-18 11:00:00.000'::timestamp as load_tstamp
+            {% if target.type == 'bigquery' %}[struct(cast(null as timestamp) as created_at, timestamp '2025-12-18 10:02:00' as merged_at, 'sp_BBBB' as snowplow_id, 'evt-001' as triggering_event_id)]{% else %}parse_json('[{"snowplow_id":"sp_BBBB","merged_at":"2025-12-18 10:02:00","triggering_event_id":"evt-001"}]'){% endif %} as merged,
+            cast('2025-12-18 10:02:00.000' as timestamp) as collector_tstamp,
+            cast('2025-12-18 10:02:00.000' as timestamp) as derived_tstamp,
+            cast('2025-12-18 11:00:00.000' as timestamp) as load_tstamp
           union all
           select
             'mev-002',
             'sp_CCCC',
-            parse_json('[{"snowplow_id":"sp_AAAA","merged_at":"2025-12-18 12:00:00","triggering_event_id":"evt-002"},{"snowplow_id":"sp_BBBB","merged_at":"2025-12-18 12:00:00","triggering_event_id":"evt-002"}]'),
-            '2025-12-18 12:00:00.000'::timestamp,
-            '2025-12-18 12:00:00.000'::timestamp,
-            '2025-12-18 13:00:00.000'::timestamp
+            {% if target.type == 'bigquery' %}[struct(cast(null as timestamp) as created_at, timestamp '2025-12-18 12:00:00' as merged_at, 'sp_AAAA' as snowplow_id, 'evt-002' as triggering_event_id), struct(cast(null as timestamp) as created_at, timestamp '2025-12-18 12:00:00' as merged_at, 'sp_BBBB' as snowplow_id, 'evt-002' as triggering_event_id)]{% else %}parse_json('[{"snowplow_id":"sp_AAAA","merged_at":"2025-12-18 12:00:00","triggering_event_id":"evt-002"},{"snowplow_id":"sp_BBBB","merged_at":"2025-12-18 12:00:00","triggering_event_id":"evt-002"}]'){% endif %},
+            cast('2025-12-18 12:00:00.000' as timestamp),
+            cast('2025-12-18 12:00:00.000' as timestamp),
+            cast('2025-12-18 13:00:00.000' as timestamp)
       - input: ref('snowplow_identities_stg_identity_events')
         rows: []
     expect:
@@ -87,8 +83,6 @@ unit_tests:
       sp_CCCC. The unique_key upsert must re-point the stored row to the new parent rather
       than leaving two mappings for one child.
     model: snowplow_identities_snowplow_id_mapping
-    config:
-      tags: ["snowflake_only"]
     overrides:
       macros:
         is_incremental: true
@@ -102,10 +96,10 @@ unit_tests:
           select
             'mev-002' as merge_event_id,
             'sp_CCCC' as active_snowplow_id,
-            parse_json('[{"snowplow_id":"sp_BBBB","merged_at":"2025-12-19 14:00:00","triggering_event_id":"evt-002"}]') as merged,
-            '2025-12-19 14:00:00.000'::timestamp as collector_tstamp,
-            '2025-12-19 14:00:00.000'::timestamp as derived_tstamp,
-            '2025-12-19 15:00:00.000'::timestamp as load_tstamp
+            {% if target.type == 'bigquery' %}[struct(cast(null as timestamp) as created_at, timestamp '2025-12-19 14:00:00' as merged_at, 'sp_BBBB' as snowplow_id, 'evt-002' as triggering_event_id)]{% else %}parse_json('[{"snowplow_id":"sp_BBBB","merged_at":"2025-12-19 14:00:00","triggering_event_id":"evt-002"}]'){% endif %} as merged,
+            cast('2025-12-19 14:00:00.000' as timestamp) as collector_tstamp,
+            cast('2025-12-19 14:00:00.000' as timestamp) as derived_tstamp,
+            cast('2025-12-19 15:00:00.000' as timestamp) as load_tstamp
       - input: this
         rows:
           - {snowplow_id: 'sp_BBBB', active_snowplow_id: 'sp_AAAA', merged_at: '2025-12-18 10:02:00.000', merge_event_id: 'mev-001', triggering_event_id: 'evt-001', load_tstamp: '2025-12-18 11:00:00.000', model_tstamp: '2025-12-18 11:05:00.000'}
@@ -124,8 +118,6 @@ unit_tests:
       forward to see it. Without the anchor term the model returns nothing here and, because
       its watermark cannot advance out of an empty window, it never would again.
     model: snowplow_identities_snowplow_id_mapping
-    config:
-      tags: ["snowflake_only"]
     overrides:
       macros:
         is_incremental: true
@@ -139,10 +131,10 @@ unit_tests:
           select
             'mev-002' as merge_event_id,
             'sp_CCCC' as active_snowplow_id,
-            parse_json('[{"snowplow_id":"sp_BBBB","merged_at":"2025-12-31 09:00:00","triggering_event_id":"evt-002"}]') as merged,
-            '2025-12-31 09:00:00.000'::timestamp as collector_tstamp,
-            '2025-12-31 09:00:00.000'::timestamp as derived_tstamp,
-            '2025-12-31 10:00:00.000'::timestamp as load_tstamp
+            {% if target.type == 'bigquery' %}[struct(cast(null as timestamp) as created_at, timestamp '2025-12-31 09:00:00' as merged_at, 'sp_BBBB' as snowplow_id, 'evt-002' as triggering_event_id)]{% else %}parse_json('[{"snowplow_id":"sp_BBBB","merged_at":"2025-12-31 09:00:00","triggering_event_id":"evt-002"}]'){% endif %} as merged,
+            cast('2025-12-31 09:00:00.000' as timestamp) as collector_tstamp,
+            cast('2025-12-31 09:00:00.000' as timestamp) as derived_tstamp,
+            cast('2025-12-31 10:00:00.000' as timestamp) as load_tstamp
       - input: this
         rows:
           - {snowplow_id: 'sp_AAAA', active_snowplow_id: 'sp_ZZZZ', merged_at: '2025-12-18 10:02:00.000', merge_event_id: 'mev-001', triggering_event_id: 'evt-001', load_tstamp: '2025-12-18 11:00:00.000', model_tstamp: '2025-12-18 11:05:00.000'}
