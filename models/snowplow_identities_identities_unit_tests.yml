@@ -12,8 +12,6 @@ unit_tests:
       seen -- not the one attached to the first or last event -- since the model's own
       watermark advances off it.
     model: snowplow_identities_identities
-    config:
-      tags: ["snowflake_only"]
     overrides:
       macros:
         is_incremental: false
@@ -34,8 +32,6 @@ unit_tests:
     description: >
       Two events create sp_AAAA and sp_BBBB. Expects one row per identity.
     model: snowplow_identities_identities
-    config:
-      tags: ["snowflake_only"]
     overrides:
       macros:
         is_incremental: false
@@ -57,8 +53,6 @@ unit_tests:
       Incremental: sp_AAAA was stored from run 1 with first_app_id=web at 10:00. A later
       batch brings a 10:30 event. first_* must be preserved and last_* advanced.
     model: snowplow_identities_identities
-    config:
-      tags: ["snowflake_only"]
     overrides:
       macros:
         is_incremental: true
@@ -83,8 +77,6 @@ unit_tests:
       advance, since the row was touched in this window -- otherwise the watermark would go
       backwards and the model would reprocess forever.
     model: snowplow_identities_identities
-    config:
-      tags: ["snowflake_only"]
     overrides:
       macros:
         is_incremental: true

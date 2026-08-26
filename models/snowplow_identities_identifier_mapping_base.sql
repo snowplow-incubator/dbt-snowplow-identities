@@ -49,7 +49,7 @@ with new_events as (
 unpivoted as (
     select
         snowplow_id,
-        col_name as id_type,
+        lower(col_name) as id_type,
         {% if var('snowplow__hash_identifiers', false) -%}
         to_hex(sha256(lower(trim(id)))) as id_value,
         {%- else -%}

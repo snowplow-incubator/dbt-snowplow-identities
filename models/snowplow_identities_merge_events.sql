@@ -37,7 +37,7 @@ with prep as (
       load_tstamp
     from {{ source('atomic', 'events') }}
     where event_name = 'identity_merge'
-    and app_id = 'snowplow-identities'
+    and {{ snowplow_utils.app_id_filter(var('snowplow__identities_app_id', [])) }}
     and {{ snowplow_identities.get_incremental_filter(use_atomic_partition=true) }}
     qualify row_number() over (partition by event_id order by load_tstamp, derived_tstamp) = 1
 )
