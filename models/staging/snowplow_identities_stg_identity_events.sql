@@ -61,9 +61,7 @@ with prep as (
         contexts_com_snowplowanalytics_snowplow_identity_2 is not null
     {% endif %}
     and {{ snowplow_identities.get_incremental_filter(use_atomic_partition=true, anchor=false) }}
-    {%- if var('snowplow__app_id', []) | length > 0 %}
-    and app_id in ({% for aid in var('snowplow__app_id', []) %}'{{ aid }}'{% if not loop.last %}, {% endif %}{% endfor %})
-    {%- endif %}
+    and {{ snowplow_utils.app_id_filter(var('snowplow__app_id', [])) }}
     qualify row_number() over (partition by event_id order by load_tstamp, derived_tstamp) = 1
 )
 
