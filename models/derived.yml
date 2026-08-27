@@ -106,6 +106,17 @@ models:
         description: 'The derived_tstamp from the last event associated with this identifier.'
       - name: first_seen_event_id
         description: 'The first event that contributed this identifier to the mapping.'
+      - name: mapping_state
+        description: 'How many identities this identifier resolves to. `single` means one. `multiple` means several that can be ranked. `unranked` means several that cannot.'
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['single', 'multiple', 'unranked']
+      - name: is_preferred
+        description: 'Marks the row to use when you want one row per identifier. Always true when mapping_state is `single`. True for the oldest owner when mapping_state is `multiple`, but only if snowplow__merge_limit_collapse is set. Always false when mapping_state is `unranked`, so a filter on this column returns no row rather than a guess.'
+        tests:
+          - not_null
 
   - name: snowplow_identities_snowplow_id_mapping
     description: '{{ doc("table_snowplow_id_mapping") }}'
