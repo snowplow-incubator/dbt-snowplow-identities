@@ -35,6 +35,13 @@ Added
 - `snowplow__partition_tstamp`, `snowplow__partition_tstamp_type` and
   `snowplow__partition_buffer_days`, for when `atomic.events` is partitioned on something
   other than `load_tstamp`.
+- `snowplow_identities_identifier_mapping` gains `mapping_state` and `is_preferred`.
+  `mapping_state` says how many identities an identifier resolves to, and whether several
+  are safe to rank. `is_preferred` marks the row to use when you want one row per
+  identifier.
+- `snowplow__merge_limit_collapse` (default false). It lets `is_preferred` pick the oldest
+  owner when an identifier has several. Only safe when no identifier is configured as
+  unique in the identity service.
 
 Fixed
 - Merges no longer rewrite, re-point or delete identifier rows.
