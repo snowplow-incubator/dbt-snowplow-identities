@@ -40,6 +40,7 @@ vars:
     snowplow__backfill_limit_days: 30 # New days of data each model advances per run. A floor, not a cap: a model behind snowplow_identities_stg_identity_events extends its window to that model's watermark.
     snowplow__lookback_days: 1 # Days of overlap re-scanned each run for late-arriving data. Also the run-twice idempotency window.
     # filter your data:
+    snowplow__merge_limit_collapse: false # Marks the identity holding an identifier's most recent sighting as is_preferred when the identifier sits under several. Covers both a merge the service refused at its limit and an identifier that expired and came back under a new identity. ONLY safe when no identifier is configured as unique in the identity service.
     snowplow__app_id: [] # Restricts which of your own applications' events are processed. Empty means all.
     snowplow__identities_app_id: ['snowplow-identities'] # app_id the identity service emits its own events under. Empty means no filter.
 

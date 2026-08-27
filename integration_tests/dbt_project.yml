@@ -71,6 +71,7 @@ seeds:
         first_derived_tstamp: timestamp
         last_derived_tstamp: timestamp
         created_at: timestamp
+        is_preferred: boolean
   +quote_columns: false
 flags:
   require_generic_test_arguments_property: true
