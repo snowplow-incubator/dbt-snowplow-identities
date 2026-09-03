@@ -200,12 +200,12 @@ unit_tests:
       Merge limit collapse. sp_AAAA and sp_BBBB each have rows for shared-x and
       shared-z, and this batch brings an event for shared-x under sp_AAAA and
       one for shared-z under sp_BBBB. sp_AAAA was created first, so it is the
-      oldest for both identifiers, but collapsing also requires the oldest
-      identity to be the one the identifier was last seen under. shared-x was
-      last seen under sp_AAAA, so it collapses there. shared-z was last seen
-      under sp_BBBB, so it is left alone: an identifier whose latest activity
-      sits under a younger identity may have been evicted from the older one,
-      and moving it back would attach live history to a dead identity.
+      oldest for both identifiers, and it saw each of them while sp_BBBB also
+      held it, so both collapse under sp_AAAA. shared-z's latest event sits
+      under sp_BBBB, which does not matter: two live identities holding one
+      identifier at the same time can only come from a refused merge. The
+      eviction case, where the windows do not overlap, is
+      collapse_leaves_eviction_gap.
     model: snowplow_identities_identifier_mapping
     overrides:
       vars:
@@ -235,7 +235,7 @@ unit_tests:
     expect:
       rows:
         - {active_snowplow_id: 'sp_AAAA', id_type: 'DOMAIN_USERID', id_value: 'shared-x', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2026-01-01 00:00:00.000', last_seen_at: '2026-01-13 10:00:00.000', first_seen_event_id: 'evt-ax'}
-        - {active_snowplow_id: 'sp_BBBB', id_type: 'DOMAIN_USERID', id_value: 'shared-z', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2026-01-02 00:00:00.000', last_seen_at: '2026-01-13 11:00:00.000', first_seen_event_id: 'evt-bz'}
+        - {active_snowplow_id: 'sp_AAAA', id_type: 'DOMAIN_USERID', id_value: 'shared-z', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2026-01-01 00:00:00.000', last_seen_at: '2026-01-13 11:00:00.000', first_seen_event_id: 'evt-az'}
 
   - name: test__snowplow_identities_identifier_mapping__unknown_age_root_never_absorbed
     description: >
