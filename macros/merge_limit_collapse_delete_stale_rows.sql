@@ -2,9 +2,9 @@
    MERGE rewrites rows under the picked snowplow_id but cannot remove the old rows,
    which have different uuids. This runs after the MERGE and deletes them. It repeats
    the model's pick over the table as it now stands: per identifier the snowplow_id
-   with the earliest created_at in new_identities wins, that snowplow_id must also be
-   the one the identifier was last seen under, and identifiers with any undated
-   snowplow_id are skipped. A row still keyed to an already-merged
+   with the earliest created_at in new_identities wins, that snowplow_id must have
+   seen the identifier at or after the earliest first_seen_at under any other
+   snowplow_id, and identifiers with any undated snowplow_id are skipped. A row still keyed to an already-merged
    snowplow_id is read through snowplow_id_mapping first, the same way the model
    reads it. Only rows whose identifier is in this batch are deleted; anything else
    waits until its identifier next appears. Everything is filtered to this batch's
@@ -41,6 +41,7 @@
                     t.id_type,
                     t.id_value,
                     t.active_snowplow_id as stored_snowplow_id,
+                    t.first_seen_at,
                     t.last_seen_at,
                     coalesce(sm.active_snowplow_id, t.active_snowplow_id) as active_snowplow_id
                 from {{ this }} t
@@ -69,28 +70,41 @@
             )
 
             -- same two conditions as the model: the oldest snowplow_id wins,
-            -- and it must also be the one the identifier was last seen under,
-            -- otherwise the identifier was evicted rather than linked and
-            -- nothing may be deleted
-            , pick as (
-                select id_type, id_value, pick_snowplow_id
+            -- and it must have seen the identifier at or after the earliest
+            -- first_seen_at under any other snowplow_id, otherwise the
+            -- identifier was evicted rather than linked and nothing may be
+            -- deleted
+            , oldest as (
+                select id_type, id_value, active_snowplow_id as pick_snowplow_id
                 from (
                     select
                         r.id_type,
                         r.id_value,
-                        r.active_snowplow_id as pick_snowplow_id,
-                        first_value(r.active_snowplow_id) over (
-                            partition by r.id_type, r.id_value
-                            order by r.last_seen_at desc, ni.created_at asc nulls last, r.active_snowplow_id asc
-                            rows between unbounded preceding and current row
-                        ) as last_seen_snowplow_id,
+                        r.active_snowplow_id,
                         row_number() over (partition by r.id_type, r.id_value order by ni.created_at asc nulls last, r.active_snowplow_id asc) as rn
                     from run_rows r
                     left join identity_ages ni
                         on r.active_snowplow_id = ni.snowplow_id
                 ) ranked
                 where rn = 1
-                and pick_snowplow_id = last_seen_snowplow_id
+            )
+
+            , pick as (
+                select id_type, id_value, pick_snowplow_id
+                from (
+                    select
+                        o.id_type,
+                        o.id_value,
+                        o.pick_snowplow_id,
+                        max(case when r.active_snowplow_id = o.pick_snowplow_id then r.last_seen_at end) as pick_last_seen_at,
+                        min(case when r.active_snowplow_id != o.pick_snowplow_id then r.first_seen_at end) as others_first_seen_at
+                    from oldest o
+                    inner join run_rows r
+                        on r.id_type = o.id_type and r.id_value = o.id_value
+                    group by o.id_type, o.id_value, o.pick_snowplow_id
+                ) windows
+                where others_first_seen_at is null
+                or pick_last_seen_at >= others_first_seen_at
             )
 
             -- Compare the id AS STORED in the row, not the id after reading

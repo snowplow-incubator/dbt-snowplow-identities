@@ -64,7 +64,7 @@ Setting var('snowplow__merge_limit_collapse') to true collapses those rows: for 
 
 Repairs happen the next time an identifier appears in a batch rather than retroactively, so existing rows clear over time; a full refresh from `snowplow__start_date` converges them at once.
 
-Two cases are left alone with the var on. An identifier whose identities have no `created_at` in `snowplow_identities_new_identities` cannot be ordered by age, so it waits until one does. An identifier whose most recent activity sits under a younger identity is not collapsed either, because that is what a TTL eviction looks like: the identifier was evicted from the older identity and now belongs to a newer one, and both rows are real history.
+Two cases are left alone with the var on. An identifier whose identities have no `created_at` in `snowplow_identities_new_identities` cannot be ordered by age, so it waits until one does. An identifier whose oldest identity never saw it at or after a younger identity first did is not collapsed either, because that gap is what a TTL eviction looks like: the identifier was evicted from the older identity and later picked up by a newer one, and both rows are real history. Overlapping windows mean the service linked the identifier into the oldest identity while the younger one was live, which only the merge limit produces, so those rows collapse even when the identifier's last event sits under the younger identity.
 {% enddocs %}
 
 
