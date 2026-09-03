@@ -2,9 +2,10 @@
    MERGE rewrites rows under the picked snowplow_id but cannot remove the old rows,
    which have different uuids. This runs after the MERGE and deletes them. It repeats
    the model's pick over the table as it now stands: per identifier the snowplow_id
-   with the earliest created_at in new_identities wins, that snowplow_id must have
-   seen the identifier at or after the earliest first_seen_at under any other
-   snowplow_id, and identifiers with any undated snowplow_id are skipped. A row still keyed to an already-merged
+   with the earliest created_at in new_identities wins, that snowplow_id must either
+   be the one the identifier was last seen under or have first seen the identifier
+   after every other snowplow_id was created, and identifiers with any undated
+   snowplow_id are skipped. A row still keyed to an already-merged
    snowplow_id is read through snowplow_id_mapping first, the same way the model
    reads it. Only rows whose identifier is in this batch are deleted; anything else
    waits until its identifier next appears. Everything is filtered to this batch's
@@ -69,11 +70,11 @@
                 where ni.created_at is null
             )
 
-            -- same two conditions as the model: the oldest snowplow_id wins,
-            -- and it must have seen the identifier at or after the earliest
-            -- first_seen_at under any other snowplow_id, otherwise the
-            -- identifier was evicted rather than linked and nothing may be
-            -- deleted
+            -- same conditions as the model: the oldest snowplow_id wins, and
+            -- it must either be the one the identifier was last seen under or
+            -- have first seen the identifier after every other snowplow_id was
+            -- created, otherwise the identifier was evicted rather than linked
+            -- and nothing may be deleted
             , oldest as (
                 select id_type, id_value, active_snowplow_id as pick_snowplow_id
                 from (
@@ -97,14 +98,19 @@
                         o.id_value,
                         o.pick_snowplow_id,
                         max(case when r.active_snowplow_id = o.pick_snowplow_id then r.last_seen_at end) as pick_last_seen_at,
-                        min(case when r.active_snowplow_id != o.pick_snowplow_id then r.first_seen_at end) as others_first_seen_at
+                        min(case when r.active_snowplow_id = o.pick_snowplow_id then r.first_seen_at end) as pick_first_seen_at,
+                        max(case when r.active_snowplow_id != o.pick_snowplow_id then r.last_seen_at end) as others_last_seen_at,
+                        max(case when r.active_snowplow_id != o.pick_snowplow_id then ni.created_at end) as others_created_at
                     from oldest o
                     inner join run_rows r
                         on r.id_type = o.id_type and r.id_value = o.id_value
+                    left join identity_ages ni
+                        on r.active_snowplow_id = ni.snowplow_id
                     group by o.id_type, o.id_value, o.pick_snowplow_id
                 ) windows
-                where others_first_seen_at is null
-                or pick_last_seen_at >= others_first_seen_at
+                where others_last_seen_at is null
+                or pick_last_seen_at >= others_last_seen_at
+                or pick_first_seen_at >= others_created_at
             )
 
             -- Compare the id AS STORED in the row, not the id after reading

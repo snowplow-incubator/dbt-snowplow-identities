@@ -200,12 +200,12 @@ unit_tests:
       Merge limit collapse. sp_AAAA and sp_BBBB each have rows for shared-x and
       shared-z, and this batch brings an event for shared-x under sp_AAAA and
       one for shared-z under sp_BBBB. sp_AAAA was created first, so it is the
-      oldest for both identifiers, and it saw each of them while sp_BBBB also
-      held it, so both collapse under sp_AAAA. shared-z's latest event sits
-      under sp_BBBB, which does not matter: two live identities holding one
-      identifier at the same time can only come from a refused merge. The
-      eviction case, where the windows do not overlap, is
-      collapse_leaves_eviction_gap.
+      oldest for both identifiers, but collapsing also requires the oldest
+      identity to be the one the identifier was last seen under. shared-x was
+      last seen under sp_AAAA, so it collapses there. shared-z was last seen
+      under sp_BBBB, so it is left alone: an identifier whose latest activity
+      sits under a younger identity may have been evicted from the older one,
+      and moving it back would attach live history to a dead identity.
     model: snowplow_identities_identifier_mapping
     overrides:
       vars:
@@ -235,7 +235,7 @@ unit_tests:
     expect:
       rows:
         - {active_snowplow_id: 'sp_AAAA', id_type: 'DOMAIN_USERID', id_value: 'shared-x', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2026-01-01 00:00:00.000', last_seen_at: '2026-01-13 10:00:00.000', first_seen_event_id: 'evt-ax'}
-        - {active_snowplow_id: 'sp_AAAA', id_type: 'DOMAIN_USERID', id_value: 'shared-z', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2026-01-01 00:00:00.000', last_seen_at: '2026-01-13 11:00:00.000', first_seen_event_id: 'evt-az'}
+        - {active_snowplow_id: 'sp_BBBB', id_type: 'DOMAIN_USERID', id_value: 'shared-z', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2026-01-02 00:00:00.000', last_seen_at: '2026-01-13 11:00:00.000', first_seen_event_id: 'evt-bz'}
 
   - name: test__snowplow_identities_identifier_mapping__unknown_age_root_never_absorbed
     description: >
@@ -463,3 +463,38 @@ unit_tests:
     expect:
       rows:
         - {active_snowplow_id: 'sp_YOUNG', id_type: 'DOMAIN_USERID', id_value: 'shared-y', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2026-03-01 00:00:00.000', last_seen_at: '2026-03-03 10:00:00.000', first_seen_event_id: 'evt-yy'}
+
+  - name: test__snowplow_identities_identifier_mapping__collapse_leaves_late_event_after_eviction
+    description: >
+      Merge limit collapse. shared-w was evicted from sp_OLD in January and
+      picked up by sp_YOUNG, created in March. A late event for shared-w with a
+      December derived_tstamp then arrives and is resolved to sp_YOUNG, which
+      stretches sp_YOUNG's window back past sp_OLD's. Neither collapse
+      condition holds: sp_YOUNG has the latest event, and sp_OLD first saw the
+      identifier before sp_YOUNG was created. Nothing moves.
+    model: snowplow_identities_identifier_mapping
+    overrides:
+      vars:
+        snowplow__merge_limit_collapse: true
+      macros:
+        is_incremental: true
+        snowplow_utils.is_run_with_new_events: "true"
+    given:
+      - input: ref('snowplow_identities_identifier_mapping_this_run')
+        rows:
+          - {uuid: 'uuid-yw2', active_snowplow_id: 'sp_YOUNG', id_type: 'DOMAIN_USERID', id_value: 'shared-w', first_app_id: 'mobile', last_app_id: 'mobile', first_seen_at: '2025-12-28 09:00:00.000', last_seen_at: '2025-12-28 09:00:00.000', first_seen_event_id: 'evt-late'}
+      - input: ref('snowplow_identities_snowplow_id_mapping_this_run')
+        rows: []
+      - input: ref('snowplow_identities_snowplow_id_mapping')
+        rows: []
+      - input: ref('snowplow_identities_new_identities')
+        rows:
+          - {snowplow_id: 'sp_OLD', created_at: '2026-01-01 00:00:00.000'}
+          - {snowplow_id: 'sp_YOUNG', created_at: '2026-03-01 00:00:00.000'}
+      - input: this
+        rows:
+          - {uuid: 'uuid-ow', active_snowplow_id: 'sp_OLD', id_type: 'DOMAIN_USERID', id_value: 'shared-w', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2026-01-01 00:00:00.000', last_seen_at: '2026-01-05 00:00:00.000', first_seen_event_id: 'evt-ow'}
+          - {uuid: 'uuid-yw', active_snowplow_id: 'sp_YOUNG', id_type: 'DOMAIN_USERID', id_value: 'shared-w', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2026-03-01 00:00:00.000', last_seen_at: '2026-03-02 00:00:00.000', first_seen_event_id: 'evt-yw'}
+    expect:
+      rows:
+        - {active_snowplow_id: 'sp_YOUNG', id_type: 'DOMAIN_USERID', id_value: 'shared-w', first_app_id: 'mobile', last_app_id: 'web', first_seen_at: '2025-12-28 09:00:00.000', last_seen_at: '2026-03-02 00:00:00.000', first_seen_event_id: 'evt-late'}
