@@ -147,3 +147,12 @@ Batch 1: A, B, C, D, E, F created.
 Batch 2: Sequential bridges with drain between each: A+B, B+C, C+D, D+E, E+F.
 Engine emits one cumulative merge event with all 5 children merged into A.
 Tests: deep chain in single batch, cumulative merge event at depth.
+
+### merge_limit_split
+Batch 1: A created (duid_MLS_A, uid_MLS_U1). B, C, D created. Bridge B→A, C→A, D→A, taking A to the 3-merge limit.
+Batch 2: E created (duid_MLS_E, nuid_MLS_E). Event `05eb2b5c` then carries duid_MLS_E + uid_MLS_U1, which would merge E into A. A is at its limit, so the engine links instead and duid_MLS_E ends up under both E and A.
+Batch 3: duid_MLS_X arrives on E's nuid.
+Config: `(unique :user_id)`. The refused event carries `decision_reasons` `["merge_limit_exceeded", "unique_identifier_conflict"]`.
+Tests: a unique-identifier conflict occurring alongside a merge limit suppresses the `merge_limited` label, because the conflict means the two identities are legitimately separate and the limit alone must not name a winner. duid_MLS_E stays `multiple` under both owners and neither is preferred. Dropping `unique_identifier_conflict` from that event labels both duid_MLS_E rows `merge_limited` and prefers A, so the suppression is load-bearing rather than a fixture that changes nothing.
+
+Engine agreement, unverified and partly negative: the service would **not** emit both reasons for this event shape. `planOperations` only reaches `planConflictedResolution` when `detectUniqueIdentifierConflicts` finds more than one distinct unique-identifier value across the group's stored rows, registry and batch. Here uid_MLS_U1 is the only user_id in play (E carries none), so no conflict is flagged and the decision goes straight to `planMergeOrDowngrade`, which would record `merge_limit_exceeded` on its own. The two reasons *can* co-occur — `planConflictedResolution`'s default branch calls `planMergeOrDowngrade`, and that is where the limit blocks a merge — but only when the group is flagged as conflicted, carries exactly one unique value, and two or more of the resolved identities already store that same value, so that the merge the limit then blocks is between them. This scenario does not seed that shape; the reason pair is carried here to exercise the model's suppression guard. Read from `pkg/service/batch_processor.go` in the identity service, where `decision_reasons` does not exist yet, so this describes planned control flow rather than observed output.
