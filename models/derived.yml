@@ -109,14 +109,14 @@ models:
       - name: first_seen_event_id
         description: 'The first event that contributed this identifier to the mapping.'
       - name: mapping_state
-        description: 'How many identities this identifier resolves to. `single` means one, so there is nothing to choose. `multiple` means several, and a heuristic can pick one of them. `unranked` means several that the heuristic cannot pick between.'
+        description: 'How many identities this identifier resolves to. `single` means one, so there is nothing to choose. `merge_limited` means several because the identity service hit its merge limit and linked instead of merging, and it reported which identity it linked to. `multiple` means several, and a heuristic can pick one of them. `unranked` means several that the heuristic cannot pick between.'
         tests:
           - not_null
           - accepted_values:
               arguments:
-                values: ['single', 'multiple', 'unranked']
+                values: ['single', 'multiple', 'unranked', 'merge_limited']
       - name: is_preferred
-        description: 'The row to use when you want one row per identifier. True for `single`. For `multiple` it is the row the heuristic picks, which it will only do when it knows enough about the pipeline to be safe. For example, with no configured unique identifier it is safe to set snowplow__merge_limit_collapse to derive merge limited duplicates. False otherwise, so filtering on it returns nothing for an identifier we can not choose between.'
+        description: 'The row to use when you want one row per identifier. True for `single`. For `merge_limited` it is the identity the service linked to, which it named itself. For `multiple` it is the row the heuristic picks, which it will only do when it knows enough about the pipeline to be safe. For example, with no configured unique identifier it is safe to set snowplow__merge_limit_collapse to derive merge limited duplicates. False otherwise, so filtering on it returns nothing for an identifier we can not choose between.'
         tests:
           - not_null
 
