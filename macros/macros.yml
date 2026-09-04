@@ -38,6 +38,11 @@ macros:
       - name: b
         type: string
         description: Expression yielding an array, or null.
+  - name: reason_array_type
+    description: >
+      The warehouse's type for a decision_reasons array, for casting a null that feeds
+      array_union when the stored side of the union does not exist yet. Dispatched per
+      warehouse.
   - name: array_concat_agg
     description: >
       Aggregate. Concatenates every array in the group, duplicates included. Pair it with

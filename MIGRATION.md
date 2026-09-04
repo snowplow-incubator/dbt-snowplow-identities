@@ -162,6 +162,39 @@ Every model logs its watermark and the window it is about to process, replacing 
 `print_run_limits` output. In normal operation all five models report the same window; during
 a backfill, or where one model is catching up behind the anchor, they legitimately differ.
 
+### Identity decision reasons
+
+The identity entity now carries `decision_reasons`, which the models store on
+`snowplow_identities_identifier_mapping_base` and read in
+`snowplow_identities_identifier_mapping`. An identifier whose reasons say the identity
+service hit its merge limit is labelled `merge_limited` rather than `multiple`.
+
+1. **The reason is empty for events loaded before the pipeline sent it.** The field is
+   reported by the identity service on the event it made the decision on, so events that
+   predate it carry nothing. This is normal, and those identifiers keep the label they had.
+
+2. **New events get the label with no action from you.** `decision_reasons` is a new column
+   on `identifier_mapping_base`, and `on_schema_change: append_new_columns` adds it on the
+   first run after the upgrade, leaving existing rows `NULL`. No manual step is needed: the
+   model checks whether the column is there before it reads its own stored value, so the run
+   that adds the column does not also need it. From the second run on, a reason recorded once
+   survives every later run whose events carry none.
+
+3. **To label older events, run a full refresh.** The models cannot recover a field the
+   events never carried, but a full refresh reprocesses history within
+   `snowplow__backfill_limit_days` and picks up the reasons on the events that do carry them:
+
+   ```bash
+   dbt run --full-refresh --select snowplow_identities_identifier_mapping_base+
+   ```
+
+   As with any full refresh here, this replays from `snowplow__start_date` and advances
+   `snowplow__backfill_limit_days` per run.
+
+4. **`mapping_state` can now return `merge_limited`.** It previously returned only `single`,
+   `multiple` or `unranked`. Update any downstream code that matches on its values, including
+   your own `accepted_values` assertions, or a `merge_limited` identifier will fail them.
+
 ---
 
 ## Why identifier_mapping became a view

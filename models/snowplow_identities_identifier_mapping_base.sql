@@ -31,6 +31,29 @@ You may obtain a copy of the Snowplow Personal and Academic License Version 1.0 
 {% set identifiers = var('snowplow__identifiers', [{'reference': 'domain_userid', 'alias': 'domain_userid'}, {'reference': 'user_id', 'alias': 'user_id'}]) %}
 {% set identifier_columns = identifiers | map(attribute='alias') | list %}
 
+{#
+  decision_reasons arrived after the table did, and the fold below reads it back off this
+  table. dbt builds the temp relation before it reconciles the schema, so on the first run
+  after the upgrade the column is not there yet to read. Probe for it and substitute a
+  typed null when it is missing; append_new_columns adds it during that same run, so the
+  probe finds it from the second run on.
+
+  The probe defaults to present and only ever answers otherwise from a relation it read.
+  Neither fallback is reachable in a real run, where is_incremental() implies a stored
+  relation: they exist for a unit test, which forces is_incremental() true and replaces
+  `this` with a fixture -- a bare string, which no relation call accepts. That fixture
+  always carries the column, so present is the correct answer there and the fold below
+  stays the plain two-column expression the tests pin.
+#}
+{%- set has_stored_reasons = true -%}
+{%- if is_incremental() and this is not string -%}
+  {%- set dest_relation = load_relation(this) -%}
+  {%- if dest_relation is not none -%}
+    {%- set dest_cols = adapter.get_columns_in_relation(dest_relation) | map(attribute='name') | map('lower') | list -%}
+    {%- set has_stored_reasons = 'decision_reasons' in dest_cols -%}
+  {%- endif -%}
+{%- endif -%}
+
 with new_events as (
     select
         snowplow_id,
@@ -135,7 +158,10 @@ this_run as (
         case when t.first_seen_at is not null and t.first_seen_at <= n.first_seen_at
              then t.first_seen_event_id else n.first_seen_event_id end as first_seen_event_id,
         greatest(n.load_tstamp, coalesce(t.load_tstamp, n.load_tstamp)) as load_tstamp,
-        {{ snowplow_identities.array_union('n.decision_reasons', 't.decision_reasons') }} as decision_reasons
+        {{ snowplow_identities.array_union(
+               'n.decision_reasons',
+               't.decision_reasons' if has_stored_reasons else 'cast(null as ' ~ snowplow_identities.reason_array_type() ~ ')'
+           ) }} as decision_reasons
     from this_run n
     left join {{ this }} t using (snowplow_id, id_type, id_value)
 )

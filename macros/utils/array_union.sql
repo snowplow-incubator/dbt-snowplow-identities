@@ -28,6 +28,20 @@ You may obtain a copy of the Snowplow Personal and Academic License Version 1.0 
   array(select distinct x from unnest(array_concat(ifnull({{ a }}, []), ifnull({{ b }}, []))) as x order by x)
 {%- endmacro -%}
 
+{#
+  The array type to cast a null to when the stored side of a union is not there yet. A
+  bare null has no type on BigQuery, so the concat it feeds cannot resolve its element
+  type without one.
+#}
+
+{% macro reason_array_type() %}
+  {{ return(adapter.dispatch('reason_array_type', 'snowplow_identities')()) }}
+{%- endmacro -%}
+
+{% macro snowflake__reason_array_type() %}array{%- endmacro -%}
+
+{% macro bigquery__reason_array_type() %}array<string>{%- endmacro -%}
+
 {% macro array_concat_agg(col) %}
   {{ return(adapter.dispatch('array_concat_agg', 'snowplow_identities')(col)) }}
 {%- endmacro -%}
