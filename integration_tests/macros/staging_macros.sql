@@ -35,7 +35,8 @@ select
         then array(
             select as struct
                 json_value(item, '$.snowplow_id') as snowplow_id,
-                cast(json_value(item, '$.created_at') as timestamp) as created_at
+                cast(json_value(item, '$.created_at') as timestamp) as created_at,
+                json_extract_string_array(item, '$.decision_reasons') as decision_reasons
             from unnest(json_extract_array(contexts_com_snowplowanalytics_snowplow_identity_2)) as item
         )
         else null

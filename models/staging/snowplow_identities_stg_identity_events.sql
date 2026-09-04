@@ -68,6 +68,7 @@ with prep as (
 select
     snowplow_id,
     created_at,
+    decision_reasons,
     {% for identifier in identifiers -%}
     {{ identifier.alias }},
     {% endfor -%}
