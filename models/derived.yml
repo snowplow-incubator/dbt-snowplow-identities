@@ -79,6 +79,8 @@ models:
         description: 'The newest load_tstamp seen for this identifier. This model self-watermarks off its max.'
         tests:
           - not_null
+      - name: decision_reasons
+        description: 'Sorted set of the reasons the identity service gave for its decisions about this identifier, e.g. "merge_limit_exceeded". Accumulated rather than replaced: only the event the decision was made on carries a reason, so the ones that follow it would otherwise erase it. Empty when none was ever reported.'
 
   - name: snowplow_identities_identifier_mapping
     description: '{{ doc("table_identifier_mapping") }}'

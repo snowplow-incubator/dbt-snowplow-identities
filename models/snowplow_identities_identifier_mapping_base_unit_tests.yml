@@ -120,3 +120,76 @@ unit_tests:
     expect:
       rows:
         - {snowplow_id: 'sp_AAAA', id_type: 'domain_userid', id_value: 'user-aaa', first_app_id: 'web', last_app_id: 'mobile', first_seen_at: '2025-12-15 10:00:00.000', last_seen_at: '2025-12-17 10:00:00.000', first_seen_event_id: 'evt-mon', load_tstamp: '2025-12-17 11:00:00.000'}
+
+  # The three cases below carry decision_reasons, an array. A yaml list renders as a
+  # square-bracket array literal, which every supported warehouse parses.
+
+  - name: test__snowplow_identities_identifier_mapping_base__reason_survives_an_unflagged_event
+    description: >
+      Incremental: the stored row carries a reason and the new event carries none. A reason
+      describes the identifier, not the event that happened to report it, so the store keeps
+      it. Only the flagged event ever carries the reason, so anything that overwrites rather
+      than folds loses it on the very next run.
+    model: snowplow_identities_identifier_mapping_base
+    overrides:
+      macros:
+        is_incremental: true
+      vars:
+        snowplow__start_date: '2025-12-01'
+        snowplow__backfill_limit_days: 90
+    given:
+      - input: ref('snowplow_identities_stg_identity_events')
+        rows:
+          - {snowplow_id: 'sp_AAAA', created_at: '2025-12-15 10:00:00.500', decision_reasons: null, domain_userid: 'user-aaa', user_id: null, event_id: 'evt-wed', app_id: 'mobile', derived_tstamp: '2025-12-17 10:00:00.000', collector_tstamp: '2025-12-17 10:00:00.100', load_tstamp: '2025-12-17 11:00:00.000'}
+      - input: this
+        rows:
+          - {id_key: 'k_aaa', snowplow_id: 'sp_AAAA', id_type: 'domain_userid', id_value: 'user-aaa', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2025-12-15 10:00:00.000', last_seen_at: '2025-12-15 10:00:10.000', first_seen_event_id: 'evt-mon', load_tstamp: '2025-12-15 11:00:00.000', decision_reasons: ['merge_limit_exceeded']}
+    expect:
+      rows:
+        - {snowplow_id: 'sp_AAAA', id_type: 'domain_userid', id_value: 'user-aaa', decision_reasons: ['merge_limit_exceeded']}
+
+  - name: test__snowplow_identities_identifier_mapping_base__reasons_union_across_runs
+    description: >
+      Incremental: the run carries a different reason from the one already stored. Both apply
+      to the identifier, so the run adds to the set rather than replacing it. Sorted, so the
+      stored value does not depend on the order the runs happened to arrive in.
+    model: snowplow_identities_identifier_mapping_base
+    overrides:
+      macros:
+        is_incremental: true
+      vars:
+        snowplow__start_date: '2025-12-01'
+        snowplow__backfill_limit_days: 90
+    given:
+      - input: ref('snowplow_identities_stg_identity_events')
+        rows:
+          - {snowplow_id: 'sp_AAAA', created_at: '2025-12-15 10:00:00.500', decision_reasons: ['ttl_expired'], domain_userid: 'user-aaa', user_id: null, event_id: 'evt-wed', app_id: 'mobile', derived_tstamp: '2025-12-17 10:00:00.000', collector_tstamp: '2025-12-17 10:00:00.100', load_tstamp: '2025-12-17 11:00:00.000'}
+      - input: this
+        rows:
+          - {id_key: 'k_aaa', snowplow_id: 'sp_AAAA', id_type: 'domain_userid', id_value: 'user-aaa', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2025-12-15 10:00:00.000', last_seen_at: '2025-12-15 10:00:10.000', first_seen_event_id: 'evt-mon', load_tstamp: '2025-12-15 11:00:00.000', decision_reasons: ['merge_limit_exceeded']}
+    expect:
+      rows:
+        - {snowplow_id: 'sp_AAAA', id_type: 'domain_userid', id_value: 'user-aaa', decision_reasons: ['merge_limit_exceeded', 'ttl_expired']}
+
+  - name: test__snowplow_identities_identifier_mapping_base__reasons_union_within_a_run
+    description: >
+      One run, one identifier, three events, with the reasons arriving on the second and
+      third. Every other per-identifier field is read off the earliest event's row, so taking
+      decision_reasons from there too would drop both. The union spans the whole group, and a
+      reason repeated across events collapses to one entry.
+    model: snowplow_identities_identifier_mapping_base
+    overrides:
+      macros:
+        is_incremental: false
+      vars:
+        snowplow__start_date: '2025-12-01'
+        snowplow__backfill_limit_days: 90
+    given:
+      - input: ref('snowplow_identities_stg_identity_events')
+        rows:
+          - {snowplow_id: 'sp_AAAA', created_at: '2025-12-18 10:00:00.500', decision_reasons: null, domain_userid: 'user-aaa', user_id: null, event_id: 'evt-001', app_id: 'web', derived_tstamp: '2025-12-18 10:00:00.000', collector_tstamp: '2025-12-18 10:00:00.100', load_tstamp: '2025-12-18 11:00:00.000'}
+          - {snowplow_id: 'sp_AAAA', created_at: '2025-12-18 10:00:00.500', decision_reasons: ['merge_limit_exceeded'], domain_userid: 'user-aaa', user_id: null, event_id: 'evt-002', app_id: 'web', derived_tstamp: '2025-12-18 10:01:00.000', collector_tstamp: '2025-12-18 10:01:00.100', load_tstamp: '2025-12-18 11:00:00.000'}
+          - {snowplow_id: 'sp_AAAA', created_at: '2025-12-18 10:00:00.500', decision_reasons: ['merge_limit_exceeded', 'ttl_expired'], domain_userid: 'user-aaa', user_id: null, event_id: 'evt-003', app_id: 'web', derived_tstamp: '2025-12-18 10:02:00.000', collector_tstamp: '2025-12-18 10:02:00.100', load_tstamp: '2025-12-18 11:00:00.000'}
+    expect:
+      rows:
+        - {snowplow_id: 'sp_AAAA', id_type: 'domain_userid', id_value: 'user-aaa', decision_reasons: ['merge_limit_exceeded', 'ttl_expired']}

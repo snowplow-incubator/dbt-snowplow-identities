@@ -27,6 +27,34 @@ macros:
           stg_identity_events itself, which is the anchor. Without it a model whose events
           are sparser than snowplow__backfill_limit_days strands itself, since an empty
           window leaves its watermark, and therefore the window, unchanged.
+  - name: array_union
+    description: >
+      Sorted, deduplicated union of two string arrays, treating null as empty. Dispatched
+      per warehouse.
+    arguments:
+      - name: a
+        type: string
+        description: Expression yielding an array, or null.
+      - name: b
+        type: string
+        description: Expression yielding an array, or null.
+  - name: array_concat_agg
+    description: >
+      Aggregate. Concatenates every array in the group, duplicates included. Pair it with
+      array_sort_distinct in the next CTE: BigQuery cannot aggregate arrays and deduplicate
+      them in the same select. Dispatched per warehouse.
+    arguments:
+      - name: col
+        type: string
+        description: Name of an array column, whose nulls count as empty.
+  - name: array_sort_distinct
+    description: >
+      Sorted, deduplicated copy of one array, treating null as empty. Dispatched per
+      warehouse.
+    arguments:
+      - name: col
+        type: string
+        description: Expression yielding an array, or null.
   - name: extract_merged
     description: >
       Flattens the cumulative `merged` array of a merge-events relation into one row per

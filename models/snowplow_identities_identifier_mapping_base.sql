@@ -40,7 +40,8 @@ with new_events as (
         event_id,
         app_id,
         derived_tstamp,
-        load_tstamp
+        load_tstamp,
+        decision_reasons
     from {{ ref('snowplow_identities_stg_identity_events') }} s
     where {{ snowplow_identities.get_incremental_filter('s') }}
     and snowplow_id is not null
@@ -58,10 +59,25 @@ unpivoted as (
         event_id,
         app_id,
         derived_tstamp,
-        load_tstamp
+        load_tstamp,
+        decision_reasons
     from new_events
     unpivot(id for col_name in ({{ identifier_columns | join(', ') }}))
     where id is not null
+),
+
+-- decision_reasons is reported on the event the engine made the decision on, while every
+-- other field below comes off the group's earliest event, so the reasons are unioned over
+-- the whole group instead. Two steps because BigQuery cannot aggregate arrays and
+-- deduplicate them in the same select.
+reasons as (
+    select
+        snowplow_id,
+        id_type,
+        id_value,
+        {{ snowplow_identities.array_concat_agg('decision_reasons') }} as decision_reasons
+    from unpivoted
+    group by 1, 2, 3
 ),
 
 -- Aggregate after hashing: lower/trim can collapse distinct raw values onto one hash.
@@ -91,16 +107,19 @@ this_run as (
         first_seen_at,
         last_seen_at,
         first_seen_event_id,
-        load_tstamp
+        load_tstamp,
+        {{ snowplow_identities.array_sort_distinct('decision_reasons') }} as decision_reasons
     from ranked
+    inner join reasons using (snowplow_id, id_type, id_value)
     where rn = 1
 )
 
 {% if is_incremental() %}
 
 -- Widen the seen-at window against the stored row, keeping the app_id and event_id from
--- whichever side saw it first/last. Joined on the natural key (equivalent to id_key, which
--- is derived from it) so the fold stays unit testable.
+-- whichever side saw it first/last, and union the decision reasons so a reason recorded on
+-- one run survives every later run whose events carry none. Joined on the natural key
+-- (equivalent to id_key, which is derived from it) so the fold stays unit testable.
 , folded as (
     select
         n.id_key,
@@ -115,7 +134,8 @@ this_run as (
         greatest(n.last_seen_at, coalesce(t.last_seen_at, n.last_seen_at)) as last_seen_at,
         case when t.first_seen_at is not null and t.first_seen_at <= n.first_seen_at
              then t.first_seen_event_id else n.first_seen_event_id end as first_seen_event_id,
-        greatest(n.load_tstamp, coalesce(t.load_tstamp, n.load_tstamp)) as load_tstamp
+        greatest(n.load_tstamp, coalesce(t.load_tstamp, n.load_tstamp)) as load_tstamp,
+        {{ snowplow_identities.array_union('n.decision_reasons', 't.decision_reasons') }} as decision_reasons
     from this_run n
     left join {{ this }} t using (snowplow_id, id_type, id_value)
 )
