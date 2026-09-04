@@ -80,7 +80,7 @@ models:
         tests:
           - not_null
       - name: decision_reasons
-        description: 'Sorted set of the reasons the identity service gave for its decisions about this identifier, e.g. "merge_limit_exceeded". Accumulated rather than replaced: only the event the decision was made on carries a reason, so the ones that follow it would otherwise erase it. Empty when none was ever reported.'
+        description: 'Sorted set of the reasons the identity service gave for its decisions on the events that contributed this identifier, e.g. "merge_limit_exceeded". A reason describes the decision the service made about an event, not about this identifier in particular: this model unpivots each event into one row per identifier the event carried, so the reason is stored against every one of them and not only the identifier the decision concerned. The decision does resolve the whole event''s identity, so every identifier on that event genuinely was linked to the same identity, but do not key a rule off this field for a single identifier — a reason here can be the record of a decision about a different identifier on the same event. Accumulated rather than replaced: only the event the decision was made on carries a reason, so the ones that follow it would otherwise erase it. Empty when none was ever reported.'
 
   - name: snowplow_identities_identifier_mapping
     description: '{{ doc("table_identifier_mapping") }}'

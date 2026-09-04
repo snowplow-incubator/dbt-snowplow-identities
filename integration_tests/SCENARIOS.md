@@ -148,6 +148,31 @@ Batch 2: Sequential bridges with drain between each: A+B, B+C, C+D, D+E, E+F.
 Engine emits one cumulative merge event with all 5 children merged into A.
 Tests: deep chain in single batch, cumulative merge event at depth.
 
+### merge_limit
+Batch 1: A created (duid_ML_A, uid_ML_U1). B, C, D created. Bridge B→A, C→A, D→A, taking A to the 3-merge limit.
+Batch 2: E created (duid_ML_E, nuid_ML_E). Event `5f980243` then carries duid_ML_E + uid_ML_U1, which would merge E into A. A is at its limit, so the engine links instead and duid_ML_E ends up under both E and A.
+Batch 3: The E device sends duid_ML_E + nuid_ML_E again. duid_ML_E now resolves to A, so nuid_ML_E arrives under A too.
+Config: no unique identifier, so nothing but the limit blocks the merge. The refused event carries `decision_reasons` `["merge_limit_exceeded"]`.
+Tests: the reason names the identity the engine linked to, so duid_ML_E is labelled `merge_limited` under both owners and sp_GILCR4ZVSNMENJ3IFFIW6AQSVA — A, the identity that was at its limit — is preferred over sp_GL7BJXWCMJPKFBDUV2QDZ4L3DI, the identity created for the E device in batch 2. `mapping_state` describes the identifier rather than one owner of it, so both rows read `merge_limited` and only `is_preferred` separates them. The preference does not go through the recency heuristic: `snowplow__merge_limit_collapse` is left at its default `false` here, and before the event carried a reason both rows were `multiple` with neither preferred.
+
+nuid_ML_E stays `multiple` under both owners, and that asymmetry with duid_ML_E is deliberate. The flagged event carried duid_ML_E and uid_ML_U1 only, so nuid_ML_E rode on no event the engine explained; it reaches two owners through ordinary events in batches 2 and 3, which is exactly the ambiguity `multiple` exists to report. Do not close the gap by spreading a reason to the other identifiers of an owner — a reason is a fact about one event, and only the identifiers on that event were part of what the engine decided.
+
+uid_ML_U1 shows the other side of that grain. It rode on the flagged event, so it stores `merge_limit_exceeded` too, but it has one owner and is labelled `single`: `identity_count = 1` short-circuits ahead of the `merge_limited` branch. A rule keying off `decision_reasons` for a single-owner identifier would be reading a reason recorded about a different identifier's decision.
+
+### merge_limit_partial
+Batch 1: A created (duid_MLP_A, uid_MLP_U1). B, C, D created and bridged to A, taking it to the 3-merge limit. Batch 2: E created (duid_MLP_E, nuid_MLP_E), then duid_MLP_E + uid_MLP_U1 arrives under A. Batches 3-4: nuid_MLP_E, then duid_MLP_E again, arrive under A.
+Config: no unique identifier. No event carries `decision_reasons`.
+Tests: negative control for `merge_limit` — the same refused-merge shape with the reason absent leaves duid_MLP_E and nuid_MLP_E `multiple` under both owners and neither preferred, so the label comes from the reason and not from the shape.
+
+### merge_limit_tie
+Batch 1: A created (duid_MLT_A, uid_MLT_U1). B, C, D created and bridged to A, taking it to the 3-merge limit. Batch 2: E created (duid_MLT_E). Batch 3: duid_MLT_E + uid_MLT_U1 arrives under A at the same derived_tstamp as E's own event, carrying no reason.
+Config: no unique identifier. No event carries `decision_reasons`.
+Tests: both owners of duid_MLT_E hold last_seen_at 2020-01-03 00:00:08, so recency cannot separate them and the rank falls through to `created_at`, which can. The state is therefore `multiple` rather than `unranked`, and with `snowplow__merge_limit_collapse` at its default neither row is preferred.
+
+### ttl_reappear
+Batch 1: A created (duid_TTLR_A, nuid_TTLR_A). Batch 3: nuid_TTLR_A reappears alone under a new identity, A's state having expired from the engine.
+Tests: an identifier belonging to two identities with no merge and no reason. nuid_TTLR_A is `multiple` under both owners and neither is preferred — the expiry case that is indistinguishable from a refused merge unless the engine says which it was, which is what `merge_limited` exists to separate out.
+
 ### merge_limit_split
 Batch 1: A created (duid_MLS_A, uid_MLS_U1). B, C, D created. Bridge B→A, C→A, D→A, taking A to the 3-merge limit.
 Batch 2: E created (duid_MLS_E, nuid_MLS_E). Event `05eb2b5c` then carries duid_MLS_E + uid_MLS_U1, which would merge E into A. A is at its limit, so the engine links instead and duid_MLS_E ends up under both E and A.

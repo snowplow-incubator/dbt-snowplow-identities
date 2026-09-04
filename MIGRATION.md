@@ -169,6 +169,11 @@ The identity entity now carries `decision_reasons`, which the models store on
 `snowplow_identities_identifier_mapping`. An identifier whose reasons say the identity
 service hit its merge limit is labelled `merge_limited` rather than `multiple`.
 
+Read a reason as a fact about the event, not about the identifier it is stored against. The
+service reports it on the event it made the decision on, and the base model unpivots each
+event into one row per identifier that event carried, so the reason lands on every one of
+them and not only on the identifier the decision concerned.
+
 1. **The reason is empty for events loaded before the pipeline sent it.** The field is
    reported by the identity service on the event it made the decision on, so events that
    predate it carry nothing. This is normal, and those identifiers keep the label they had.
@@ -194,6 +199,23 @@ service hit its merge limit is labelled `merge_limited` rather than `multiple`.
 4. **`mapping_state` can now return `merge_limited`.** It previously returned only `single`,
    `multiple` or `unranked`. Update any downstream code that matches on its values, including
    your own `accepted_values` assertions, or a `merge_limited` identifier will fail them.
+
+5. **`is_preferred` can now be true for an identifier with more than one owner.** Previously
+   an identifier belonging to several identities had `is_preferred` false on every row unless
+   you had turned on `snowplow__merge_limit_collapse`. A `merge_limited` identifier now has
+   exactly one row true: the identity the service said it linked to. This happens whether or
+   not `snowplow__merge_limit_collapse` is set, because the service named that identity
+   rather than a heuristic guessing at it, and the setting only governs the guess.
+
+   Two assumptions break. Anything filtering `where is_preferred` and relying on an ambiguous
+   identifier contributing no row now gets one row for it, and anything reading `is_preferred`
+   as implying `mapping_state = 'single'` — true before unless you had opted into the collapse
+   — now also sees `merge_limited`. Check downstream models that resolve an identifier to one
+   identity that way, and any uniqueness assertion built on it.
+
+   As with the label, this only appears once flagged events arrive, or for older events after
+   the full refresh in point 3, because the reason cannot be recovered for events that never
+   carried it.
 
 ---
 
