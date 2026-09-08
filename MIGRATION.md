@@ -217,6 +217,28 @@ them and not only on the identifier the decision concerned.
    the full refresh in point 3, because the reason cannot be recovered for events that never
    carried it.
 
+6. **An identifier refused a merge more than once also collapses.** With
+   `merge_limit_exceeded` on two or more of an identifier's owners, the label alone no
+   longer names one of them. The service always links into the oldest identity, so the
+   models prefer the oldest labelled owner — but only when the data rules out the labels
+   being leftovers of a TTL eviction: that owner must either hold the identifier's latest
+   sighting or have first seen it after every other owner already existed. When it does,
+   the identifier is `merge_limited` with the oldest labelled owner preferred; when it does
+   not, or a labelled owner's `created_at` is unknown, the rows stay `multiple` or
+   `unranked` as before. Like the single-label case, this does not depend on
+   `snowplow__merge_limit_collapse`.
+
+7. **An owner seen only through degraded sightings is never preferred by the heuristic.**
+   `identifier_mapping_base` now records `has_healthy_sighting` per identifier row: whether
+   any event contributing it carried neither `degraded_registry_only` nor
+   `degraded_deterministic`. With `snowplow__merge_limit_collapse` on, the recency pick
+   skips an owner whose only ties to the identifier were degraded and prefers the next
+   eligible owner; with no eligible owner, nothing is preferred. Such an owner still counts
+   in `mapping_state`. Two exceptions keep this safe: an owner the service itself labelled
+   `merge_limit_exceeded` stays fully eligible, and rows written before the column existed
+   (`has_healthy_sighting` null) stay eligible, so upgrading changes nothing until degraded
+   reasons actually arrive.
+
 ---
 
 ## Why identifier_mapping became a view

@@ -111,14 +111,14 @@ models:
       - name: first_seen_event_id
         description: 'The first event that contributed this identifier to the mapping.'
       - name: mapping_state
-        description: 'How many identities this identifier resolves to. `single` means one, so there is nothing to choose. `merge_limited` means several because the identity service hit its merge limit and linked instead of merging, and it reported which identity it linked to. `multiple` means several, and a heuristic can pick one of them. `unranked` means several that the heuristic cannot pick between.'
+        description: 'How many identities this identifier resolves to. `single` means one, so there is nothing to choose. `merge_limited` means several because the identity service hit its merge limit and linked instead of merging: either one owner carries the reported reason, naming the identity the service linked to, or several do — the identifier was refused more than once — and the oldest of them can be verified as its current home, because the service always links into the oldest identity and the labelled owner either holds the identifier''s latest sighting or first saw it after every other owner existed (a later TTL eviction produces neither). Labelled owners that fail that verification, or whose created_at is unknown, fall back to `multiple` or `unranked`. `multiple` means several, and a heuristic can pick one of them. `unranked` means several that the heuristic cannot pick between.'
         tests:
           - not_null
           - accepted_values:
               arguments:
                 values: ['single', 'multiple', 'unranked', 'merge_limited']
       - name: is_preferred
-        description: 'The row to use when you want one row per identifier. True for `single`. For `merge_limited` it is the identity the service linked to, which it named itself. For `multiple` it is the row the heuristic picks, which it will only do when it knows enough about the pipeline to be safe. For example, with no configured unique identifier it is safe to set snowplow__merge_limit_collapse to derive merge limited duplicates. False otherwise, so filtering on it returns nothing for an identifier we can not choose between.'
+        description: 'The row to use when you want one row per identifier. True for `single`. For `merge_limited` it is the identity the service linked to: the one it named itself, or with several named, the oldest of them once verified as the identifier''s current home. For `multiple` it is the row the heuristic picks, which it will only do when it knows enough about the pipeline to be safe. For example, with no configured unique identifier it is safe to set snowplow__merge_limit_collapse to derive merge limited duplicates. The heuristic never picks an owner whose every sighting of the identifier was degraded (`has_healthy_sighting` false on the base row) unless the service labelled that owner itself; the next eligible owner wins instead, and a pre-upgrade row whose health is unknown stays eligible. False otherwise, so filtering on it returns nothing for an identifier we can not choose between.'
         tests:
           - not_null
 

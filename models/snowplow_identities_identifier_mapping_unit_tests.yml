@@ -220,11 +220,12 @@ unit_tests:
         - {active_snowplow_id: 'sp_ONE', id_type: 'domain_userid', id_value: 'user-tied', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2025-12-18 10:00:00.000', last_seen_at: '2025-12-18 10:00:00.000', first_seen_event_id: 'evt-one', mapping_state: 'unranked', is_preferred: false}
         - {active_snowplow_id: 'sp_TWO', id_type: 'domain_userid', id_value: 'user-tied', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2025-12-18 10:00:00.000', last_seen_at: '2025-12-18 10:00:00.000', first_seen_event_id: 'evt-two', mapping_state: 'unranked', is_preferred: false}
 
-  # The four cases below carry decision_reasons, an array. A yaml list renders as a
-  # square-bracket array literal, which every supported warehouse parses. They all run
-  # with snowplow__merge_limit_collapse on, because that is the setting under which the
-  # recency heuristic actually picks a row and so the only one where a reason overriding
-  # it, or failing to, is visible.
+  # The cases below carry decision_reasons, an array. A yaml list renders as a
+  # square-bracket array literal, which every supported warehouse parses. The ones
+  # exercising the recency heuristic run with snowplow__merge_limit_collapse on, because
+  # that is the only setting under which it picks a row and so the only one where a rule
+  # overriding it, or failing to, is visible. The ones exercising the label run with the
+  # default, because a reason acts whether or not the operator opted into the heuristic.
 
   - name: test__snowplow_identities_identifier_mapping__merge_limited_owner_beats_recency
     description: >
@@ -277,30 +278,99 @@ unit_tests:
         - {active_snowplow_id: 'sp_FLAGGED', id_type: 'domain_userid', id_value: 'user-linked', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2025-12-18 10:00:00.000', last_seen_at: '2025-12-18 10:00:00.000', first_seen_event_id: 'evt-flagged', mapping_state: 'merge_limited', is_preferred: true}
         - {active_snowplow_id: 'sp_OTHER', id_type: 'domain_userid', id_value: 'user-linked', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2025-12-18 10:00:00.000', last_seen_at: '2025-12-18 10:00:00.000', first_seen_event_id: 'evt-other', mapping_state: 'merge_limited', is_preferred: false}
 
-  - name: test__snowplow_identities_identifier_mapping__two_merge_limited_owners_fall_back
+  - name: test__snowplow_identities_identifier_mapping__chained_refusals_prefer_oldest_owner
     description: >
-      Both owners carry the reason, so it no longer points at one of them and the models
-      have nothing to choose by. The previous behaviour has to stand: the state stays
-      multiple and the recency heuristic picks, exactly as it did before the reason existed.
+      Both owners carry the reason: the identifier was refused a merge more than once, so
+      the label alone no longer points at one owner. The service always links into the
+      oldest identity, and here the oldest labelled owner also holds the identifier's
+      latest sighting, which rules out a later TTL eviction. The collapse is safe: both
+      rows are merge_limited and the oldest owner is preferred, with the var at its default.
     model: snowplow_identities_identifier_mapping
-    overrides:
-      vars:
-        snowplow__merge_limit_collapse: true
     given:
       - input: ref('snowplow_identities_identifier_mapping_base')
         rows:
-          - {id_key: 'k_one', snowplow_id: 'sp_ONE', id_type: 'domain_userid', id_value: 'user-linked', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2025-12-17 10:00:00.000', last_seen_at: '2025-12-19 10:00:00.000', first_seen_event_id: 'evt-one', load_tstamp: '2025-12-19 11:00:00.000', decision_reasons: ['merge_limit_exceeded']}
-          - {id_key: 'k_two', snowplow_id: 'sp_TWO', id_type: 'domain_userid', id_value: 'user-linked', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2025-12-18 10:00:00.000', last_seen_at: '2025-12-18 10:00:00.000', first_seen_event_id: 'evt-two', load_tstamp: '2025-12-19 11:00:00.000', decision_reasons: ['merge_limit_exceeded']}
+          - {id_key: 'k_old', snowplow_id: 'sp_OLD', id_type: 'domain_userid', id_value: 'user-linked', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2025-12-17 10:00:00.000', last_seen_at: '2025-12-19 10:00:00.000', first_seen_event_id: 'evt-old', load_tstamp: '2025-12-19 11:00:00.000', decision_reasons: ['merge_limit_exceeded']}
+          - {id_key: 'k_young', snowplow_id: 'sp_YOUNG', id_type: 'domain_userid', id_value: 'user-linked', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2025-12-18 10:00:00.000', last_seen_at: '2025-12-18 10:00:00.000', first_seen_event_id: 'evt-young', load_tstamp: '2025-12-19 11:00:00.000', decision_reasons: ['merge_limit_exceeded']}
       - input: ref('snowplow_identities_snowplow_id_mapping')
         rows: []
       - input: ref('snowplow_identities_identities')
         rows:
-          - {snowplow_id: 'sp_ONE', created_at: '2025-12-17 09:00:00.000'}
-          - {snowplow_id: 'sp_TWO', created_at: '2025-12-18 09:00:00.000'}
+          - {snowplow_id: 'sp_OLD', created_at: '2025-12-17 09:00:00.000'}
+          - {snowplow_id: 'sp_YOUNG', created_at: '2025-12-18 09:00:00.000'}
     expect:
       rows:
-        - {active_snowplow_id: 'sp_ONE', id_type: 'domain_userid', id_value: 'user-linked', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2025-12-17 10:00:00.000', last_seen_at: '2025-12-19 10:00:00.000', first_seen_event_id: 'evt-one', mapping_state: 'multiple', is_preferred: true}
-        - {active_snowplow_id: 'sp_TWO', id_type: 'domain_userid', id_value: 'user-linked', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2025-12-18 10:00:00.000', last_seen_at: '2025-12-18 10:00:00.000', first_seen_event_id: 'evt-two', mapping_state: 'multiple', is_preferred: false}
+        - {active_snowplow_id: 'sp_OLD', id_type: 'domain_userid', id_value: 'user-linked', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2025-12-17 10:00:00.000', last_seen_at: '2025-12-19 10:00:00.000', first_seen_event_id: 'evt-old', mapping_state: 'merge_limited', is_preferred: true}
+        - {active_snowplow_id: 'sp_YOUNG', id_type: 'domain_userid', id_value: 'user-linked', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2025-12-18 10:00:00.000', last_seen_at: '2025-12-18 10:00:00.000', first_seen_event_id: 'evt-young', mapping_state: 'merge_limited', is_preferred: false}
+
+  - name: test__snowplow_identities_identifier_mapping__chained_short_visit_still_collapses
+    description: >
+      Chained refusals where the younger owner holds the latest sighting, so holding the
+      latest sighting cannot vouch for the oldest owner. The oldest owner first saw the
+      identifier after the younger identity already existed, which an eviction cannot
+      produce -- an evicted identifier's old owner saw it only before the new owner was
+      created. That guard alone lets the collapse proceed.
+    model: snowplow_identities_identifier_mapping
+    given:
+      - input: ref('snowplow_identities_identifier_mapping_base')
+        rows:
+          - {id_key: 'k_old', snowplow_id: 'sp_OLD', id_type: 'domain_userid', id_value: 'user-linked', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2025-12-18 12:00:00.000', last_seen_at: '2025-12-18 12:00:00.000', first_seen_event_id: 'evt-old', load_tstamp: '2025-12-19 11:00:00.000', decision_reasons: ['merge_limit_exceeded']}
+          - {id_key: 'k_young', snowplow_id: 'sp_YOUNG', id_type: 'domain_userid', id_value: 'user-linked', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2025-12-18 10:00:00.000', last_seen_at: '2025-12-19 10:00:00.000', first_seen_event_id: 'evt-young', load_tstamp: '2025-12-19 11:00:00.000', decision_reasons: ['merge_limit_exceeded']}
+      - input: ref('snowplow_identities_snowplow_id_mapping')
+        rows: []
+      - input: ref('snowplow_identities_identities')
+        rows:
+          - {snowplow_id: 'sp_OLD', created_at: '2025-12-01 09:00:00.000'}
+          - {snowplow_id: 'sp_YOUNG', created_at: '2025-12-18 09:00:00.000'}
+    expect:
+      rows:
+        - {active_snowplow_id: 'sp_OLD', id_type: 'domain_userid', id_value: 'user-linked', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2025-12-18 12:00:00.000', last_seen_at: '2025-12-18 12:00:00.000', first_seen_event_id: 'evt-old', mapping_state: 'merge_limited', is_preferred: true}
+        - {active_snowplow_id: 'sp_YOUNG', id_type: 'domain_userid', id_value: 'user-linked', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2025-12-18 10:00:00.000', last_seen_at: '2025-12-19 10:00:00.000', first_seen_event_id: 'evt-young', mapping_state: 'merge_limited', is_preferred: false}
+
+  - name: test__snowplow_identities_identifier_mapping__chained_eviction_falls_back
+    description: >
+      Both owners are labelled but neither guard holds: the younger owner has the latest
+      sighting, and the oldest owner last saw the identifier before the younger identity
+      existed. That is what a TTL eviction followed by reappearance looks like, so the
+      label proves a past refusal but not a current home and the previous behaviour
+      stands: multiple, nobody preferred.
+    model: snowplow_identities_identifier_mapping
+    given:
+      - input: ref('snowplow_identities_identifier_mapping_base')
+        rows:
+          - {id_key: 'k_old', snowplow_id: 'sp_OLD', id_type: 'domain_userid', id_value: 'user-linked', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2025-12-02 10:00:00.000', last_seen_at: '2025-12-02 10:00:00.000', first_seen_event_id: 'evt-old', load_tstamp: '2025-12-19 11:00:00.000', decision_reasons: ['merge_limit_exceeded']}
+          - {id_key: 'k_young', snowplow_id: 'sp_YOUNG', id_type: 'domain_userid', id_value: 'user-linked', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2025-12-18 10:00:00.000', last_seen_at: '2025-12-19 10:00:00.000', first_seen_event_id: 'evt-young', load_tstamp: '2025-12-19 11:00:00.000', decision_reasons: ['merge_limit_exceeded']}
+      - input: ref('snowplow_identities_snowplow_id_mapping')
+        rows: []
+      - input: ref('snowplow_identities_identities')
+        rows:
+          - {snowplow_id: 'sp_OLD', created_at: '2025-12-01 09:00:00.000'}
+          - {snowplow_id: 'sp_YOUNG', created_at: '2025-12-18 09:00:00.000'}
+    expect:
+      rows:
+        - {active_snowplow_id: 'sp_OLD', id_type: 'domain_userid', id_value: 'user-linked', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2025-12-02 10:00:00.000', last_seen_at: '2025-12-02 10:00:00.000', first_seen_event_id: 'evt-old', mapping_state: 'multiple', is_preferred: false}
+        - {active_snowplow_id: 'sp_YOUNG', id_type: 'domain_userid', id_value: 'user-linked', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2025-12-18 10:00:00.000', last_seen_at: '2025-12-19 10:00:00.000', first_seen_event_id: 'evt-young', mapping_state: 'multiple', is_preferred: false}
+
+  - name: test__snowplow_identities_identifier_mapping__chained_undated_labelled_owner_falls_back
+    description: >
+      Two labelled owners, one with no row in identities. "Oldest" is unverifiable when a
+      labelled owner has no created_at, even though the dated one holds the latest sighting
+      and would pass the guard. The collapse refuses and the undated fallback applies:
+      unranked, nobody preferred.
+    model: snowplow_identities_identifier_mapping
+    given:
+      - input: ref('snowplow_identities_identifier_mapping_base')
+        rows:
+          - {id_key: 'k_dated', snowplow_id: 'sp_DATED', id_type: 'domain_userid', id_value: 'user-linked', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2025-12-02 10:00:00.000', last_seen_at: '2025-12-19 10:00:00.000', first_seen_event_id: 'evt-dated', load_tstamp: '2025-12-19 11:00:00.000', decision_reasons: ['merge_limit_exceeded']}
+          - {id_key: 'k_nodate', snowplow_id: 'sp_NODATE', id_type: 'domain_userid', id_value: 'user-linked', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2025-12-18 10:00:00.000', last_seen_at: '2025-12-18 10:00:00.000', first_seen_event_id: 'evt-nodate', load_tstamp: '2025-12-19 11:00:00.000', decision_reasons: ['merge_limit_exceeded']}
+      - input: ref('snowplow_identities_snowplow_id_mapping')
+        rows: []
+      - input: ref('snowplow_identities_identities')
+        rows:
+          - {snowplow_id: 'sp_DATED', created_at: '2025-12-01 09:00:00.000'}
+    expect:
+      rows:
+        - {active_snowplow_id: 'sp_DATED', id_type: 'domain_userid', id_value: 'user-linked', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2025-12-02 10:00:00.000', last_seen_at: '2025-12-19 10:00:00.000', first_seen_event_id: 'evt-dated', mapping_state: 'unranked', is_preferred: false}
+        - {active_snowplow_id: 'sp_NODATE', id_type: 'domain_userid', id_value: 'user-linked', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2025-12-18 10:00:00.000', last_seen_at: '2025-12-18 10:00:00.000', first_seen_event_id: 'evt-nodate', mapping_state: 'unranked', is_preferred: false}
 
   - name: test__snowplow_identities_identifier_mapping__unique_conflict_suppresses_merge_limited
     description: >
@@ -327,3 +397,106 @@ unit_tests:
       rows:
         - {active_snowplow_id: 'sp_FLAGGED', id_type: 'domain_userid', id_value: 'user-linked', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2025-12-17 10:00:00.000', last_seen_at: '2025-12-17 10:00:00.000', first_seen_event_id: 'evt-flagged', mapping_state: 'multiple', is_preferred: false}
         - {active_snowplow_id: 'sp_UNIQUE', id_type: 'domain_userid', id_value: 'user-linked', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2025-12-18 10:00:00.000', last_seen_at: '2025-12-19 10:00:00.000', first_seen_event_id: 'evt-unique', mapping_state: 'multiple', is_preferred: true}
+
+  # The cases below exercise has_healthy_sighting from the base model. An owner tied to an
+  # identifier only through degraded sightings, with no merge_limit label of its own, may
+  # not hold preference; null health is a pre-upgrade row whose health is unknown, which
+  # must stay eligible or the upgrade would strip preference from data that never changed.
+
+  - name: test__snowplow_identities_identifier_mapping__degraded_owner_never_beats_the_label
+    description: >
+      One owner is named by the service, the other is tied to the identifier only through a
+      degraded sighting but holds the later one. The label decides regardless of health or
+      recency, so the flagged owner is preferred even with the collapse var on.
+    model: snowplow_identities_identifier_mapping
+    overrides:
+      vars:
+        snowplow__merge_limit_collapse: true
+    given:
+      - input: ref('snowplow_identities_identifier_mapping_base')
+        rows:
+          - {id_key: 'k_flagged', snowplow_id: 'sp_FLAGGED', id_type: 'domain_userid', id_value: 'user-linked', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2025-12-17 10:00:00.000', last_seen_at: '2025-12-17 10:00:00.000', first_seen_event_id: 'evt-flagged', load_tstamp: '2025-12-19 11:00:00.000', decision_reasons: ['merge_limit_exceeded'], has_healthy_sighting: true}
+          - {id_key: 'k_degraded', snowplow_id: 'sp_DEGRADED', id_type: 'domain_userid', id_value: 'user-linked', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2025-12-18 10:00:00.000', last_seen_at: '2025-12-19 10:00:00.000', first_seen_event_id: 'evt-degraded', load_tstamp: '2025-12-19 11:00:00.000', decision_reasons: ['degraded_registry_only'], has_healthy_sighting: false}
+      - input: ref('snowplow_identities_snowplow_id_mapping')
+        rows: []
+      - input: ref('snowplow_identities_identities')
+        rows:
+          - {snowplow_id: 'sp_FLAGGED', created_at: '2025-12-17 09:00:00.000'}
+          - {snowplow_id: 'sp_DEGRADED', created_at: '2025-12-18 09:00:00.000'}
+    expect:
+      rows:
+        - {active_snowplow_id: 'sp_FLAGGED', id_type: 'domain_userid', id_value: 'user-linked', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2025-12-17 10:00:00.000', last_seen_at: '2025-12-17 10:00:00.000', first_seen_event_id: 'evt-flagged', mapping_state: 'merge_limited', is_preferred: true}
+        - {active_snowplow_id: 'sp_DEGRADED', id_type: 'domain_userid', id_value: 'user-linked', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2025-12-18 10:00:00.000', last_seen_at: '2025-12-19 10:00:00.000', first_seen_event_id: 'evt-degraded', mapping_state: 'merge_limited', is_preferred: false}
+
+  - name: test__snowplow_identities_identifier_mapping__degraded_owner_skipped_by_collapse_pick
+    description: >
+      No labels, so the recency heuristic picks. The owner holding the latest sighting saw
+      the identifier only through degraded sightings, so it may not hold preference and the
+      next eligible owner wins instead. mapping_state still counts it: the state stays
+      multiple, not single.
+    model: snowplow_identities_identifier_mapping
+    overrides:
+      vars:
+        snowplow__merge_limit_collapse: true
+    given:
+      - input: ref('snowplow_identities_identifier_mapping_base')
+        rows:
+          - {id_key: 'k_healthy', snowplow_id: 'sp_HEALTHY', id_type: 'domain_userid', id_value: 'user-linked', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2025-12-17 10:00:00.000', last_seen_at: '2025-12-17 10:00:00.000', first_seen_event_id: 'evt-healthy', load_tstamp: '2025-12-19 11:00:00.000', decision_reasons: [], has_healthy_sighting: true}
+          - {id_key: 'k_degraded', snowplow_id: 'sp_DEGRADED', id_type: 'domain_userid', id_value: 'user-linked', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2025-12-18 10:00:00.000', last_seen_at: '2025-12-19 10:00:00.000', first_seen_event_id: 'evt-degraded', load_tstamp: '2025-12-19 11:00:00.000', decision_reasons: ['degraded_registry_only'], has_healthy_sighting: false}
+      - input: ref('snowplow_identities_snowplow_id_mapping')
+        rows: []
+      - input: ref('snowplow_identities_identities')
+        rows:
+          - {snowplow_id: 'sp_HEALTHY', created_at: '2025-12-17 09:00:00.000'}
+          - {snowplow_id: 'sp_DEGRADED', created_at: '2025-12-18 09:00:00.000'}
+    expect:
+      rows:
+        - {active_snowplow_id: 'sp_HEALTHY', id_type: 'domain_userid', id_value: 'user-linked', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2025-12-17 10:00:00.000', last_seen_at: '2025-12-17 10:00:00.000', first_seen_event_id: 'evt-healthy', mapping_state: 'multiple', is_preferred: true}
+        - {active_snowplow_id: 'sp_DEGRADED', id_type: 'domain_userid', id_value: 'user-linked', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2025-12-18 10:00:00.000', last_seen_at: '2025-12-19 10:00:00.000', first_seen_event_id: 'evt-degraded', mapping_state: 'multiple', is_preferred: false}
+
+  - name: test__snowplow_identities_identifier_mapping__null_health_stays_eligible
+    description: >
+      The row holding the latest sighting was written before has_healthy_sighting existed,
+      so its health is null: unknown, not degraded. It keeps its preference exactly as
+      before the column arrived.
+    model: snowplow_identities_identifier_mapping
+    overrides:
+      vars:
+        snowplow__merge_limit_collapse: true
+    given:
+      - input: ref('snowplow_identities_identifier_mapping_base')
+        rows:
+          - {id_key: 'k_pre', snowplow_id: 'sp_PRE', id_type: 'domain_userid', id_value: 'user-linked', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2025-12-18 10:00:00.000', last_seen_at: '2025-12-19 10:00:00.000', first_seen_event_id: 'evt-pre', load_tstamp: '2025-12-19 11:00:00.000', decision_reasons: [], has_healthy_sighting: null}
+          - {id_key: 'k_post', snowplow_id: 'sp_POST', id_type: 'domain_userid', id_value: 'user-linked', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2025-12-17 10:00:00.000', last_seen_at: '2025-12-17 10:00:00.000', first_seen_event_id: 'evt-post', load_tstamp: '2025-12-19 11:00:00.000', decision_reasons: [], has_healthy_sighting: true}
+      - input: ref('snowplow_identities_snowplow_id_mapping')
+        rows: []
+      - input: ref('snowplow_identities_identities')
+        rows:
+          - {snowplow_id: 'sp_PRE', created_at: '2025-12-18 09:00:00.000'}
+          - {snowplow_id: 'sp_POST', created_at: '2025-12-17 09:00:00.000'}
+    expect:
+      rows:
+        - {active_snowplow_id: 'sp_PRE', id_type: 'domain_userid', id_value: 'user-linked', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2025-12-18 10:00:00.000', last_seen_at: '2025-12-19 10:00:00.000', first_seen_event_id: 'evt-pre', mapping_state: 'multiple', is_preferred: true}
+        - {active_snowplow_id: 'sp_POST', id_type: 'domain_userid', id_value: 'user-linked', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2025-12-17 10:00:00.000', last_seen_at: '2025-12-17 10:00:00.000', first_seen_event_id: 'evt-post', mapping_state: 'multiple', is_preferred: false}
+
+  - name: test__snowplow_identities_identifier_mapping__degraded_owner_with_label_stays_preferred
+    description: >
+      An owner whose every sighting was degraded but that also carries the merge_limit
+      label. The label is the service naming the identity it linked to, and that answer does
+      not degrade with the sighting, so the owner stays labelled and preferred.
+    model: snowplow_identities_identifier_mapping
+    given:
+      - input: ref('snowplow_identities_identifier_mapping_base')
+        rows:
+          - {id_key: 'k_dlab', snowplow_id: 'sp_DLAB', id_type: 'domain_userid', id_value: 'user-linked', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2025-12-17 10:00:00.000', last_seen_at: '2025-12-17 10:00:00.000', first_seen_event_id: 'evt-dlab', load_tstamp: '2025-12-19 11:00:00.000', decision_reasons: ['degraded_registry_only', 'merge_limit_exceeded'], has_healthy_sighting: false}
+          - {id_key: 'k_clean', snowplow_id: 'sp_CLEAN', id_type: 'domain_userid', id_value: 'user-linked', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2025-12-18 10:00:00.000', last_seen_at: '2025-12-19 10:00:00.000', first_seen_event_id: 'evt-clean', load_tstamp: '2025-12-19 11:00:00.000', decision_reasons: [], has_healthy_sighting: true}
+      - input: ref('snowplow_identities_snowplow_id_mapping')
+        rows: []
+      - input: ref('snowplow_identities_identities')
+        rows:
+          - {snowplow_id: 'sp_DLAB', created_at: '2025-12-17 09:00:00.000'}
+          - {snowplow_id: 'sp_CLEAN', created_at: '2025-12-18 09:00:00.000'}
+    expect:
+      rows:
+        - {active_snowplow_id: 'sp_DLAB', id_type: 'domain_userid', id_value: 'user-linked', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2025-12-17 10:00:00.000', last_seen_at: '2025-12-17 10:00:00.000', first_seen_event_id: 'evt-dlab', mapping_state: 'merge_limited', is_preferred: true}
+        - {active_snowplow_id: 'sp_CLEAN', id_type: 'domain_userid', id_value: 'user-linked', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2025-12-18 10:00:00.000', last_seen_at: '2025-12-19 10:00:00.000', first_seen_event_id: 'evt-clean', mapping_state: 'merge_limited', is_preferred: false}
