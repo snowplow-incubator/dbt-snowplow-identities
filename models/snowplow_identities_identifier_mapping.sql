@@ -189,13 +189,22 @@ select * from combined
 -- identifier keeps two rows with two different active_snowplow_ids. The stage
 -- below repairs that. The service always links into the identity with the
 -- earliest created_at, so per identifier the snowplow_id with the earliest
--- created_at in new_identities is the one the service now resolves to. That
--- snowplow_id must also be the one the identifier was last seen under, which
--- separates a merge-limit link from a TTL eviction: after a link the oldest
--- identity keeps receiving the identifier's events, after an eviction the
--- identifier moves to a new identity and the oldest one is abandoned. When both
--- conditions hold, every row for the identifier is rewritten under that
--- snowplow_id and the old rows are deleted afterwards. ONLY correct when no
+-- created_at in new_identities is the one the service now resolves to. One of
+-- two further conditions must hold, and each separates a merge-limit link from
+-- a TTL eviction. Either that identity is the one the identifier was last seen
+-- under: after a link the oldest identity keeps receiving the identifier's
+-- events, after an eviction the identifier moves to a new identity and the
+-- oldest one is abandoned. Or the oldest identity first saw the identifier
+-- after the younger identity was created: the service only links an
+-- identifier into an existing identity while another identity holds it when
+-- it has refused the merge, and an evicted identifier was held by the older
+-- identity before the younger one existed. The second condition covers a
+-- short visit whose last events land under the younger identity, because the
+-- link into the oldest one is not yet visible to every instance. created_at
+-- comes from the service, so a late event with an old timestamp cannot fake
+-- it. When the age condition and one of the two hold, every row for the
+-- identifier is rewritten under the oldest snowplow_id and the old rows are
+-- deleted afterwards. ONLY correct when no
 -- identifier is configured as unique in the identity service: uniqueness is the
 -- one way two separate identities can share an identifier, and this stage would
 -- merge them.
@@ -242,9 +251,11 @@ select * from combined
 --   ordering applies to every identifier, so rows only ever move from a
 --   younger snowplow_id to an older one. Ties fall back to active_snowplow_id
 --   so the pick is always deterministic.
--- last_seen_snowplow_id: the snowplow_id holding the identifier's latest
---   last_seen_at. Rows only move when it equals pick_snowplow_id, which is
---   what separates a link from an eviction, as described above.
+-- linked: is pick_snowplow_id the snowplow_id holding the identifier's latest
+--   last_seen_at, or did it first see the identifier after every other
+--   snowplow_id was created? Rows only move when one of the two holds, which
+--   is what separates a link from an eviction, as described above. Computed
+--   in mlc_overlap, once pick_snowplow_id is known.
 -- One row per snowplow_id, whatever state new_identities is in. Without this,
 -- a duplicate row upstream would fan out through the join below and put two
 -- rows with the same uuid into the MERGE source, which halts the run.
@@ -265,14 +276,29 @@ select * from combined
             order by ni.created_at asc nulls last, r.active_snowplow_id asc
             rows between unbounded preceding and current row
         ) as pick_snowplow_id,
-        first_value(r.active_snowplow_id) over (
-            partition by r.id_type, r.id_value
-            order by r.last_seen_at desc, ni.created_at asc nulls last, r.active_snowplow_id asc
-            rows between unbounded preceding and current row
-        ) as last_seen_snowplow_id
+        ni.created_at as identity_created_at
     from mlc_rows r
     left join mlc_identity_ages ni
         on r.active_snowplow_id = ni.snowplow_id
+)
+
+-- coalesce: when every row already sits under the pick there is no younger
+-- identity to guard against, so the identifier is treated as linked.
+, mlc_overlap as (
+    select
+        f.*,
+        coalesce(
+            max(case when f.active_snowplow_id = f.pick_snowplow_id then f.last_seen_at end)
+                over (partition by f.id_type, f.id_value)
+            >= max(case when f.active_snowplow_id != f.pick_snowplow_id then f.last_seen_at end)
+                over (partition by f.id_type, f.id_value)
+            or min(case when f.active_snowplow_id = f.pick_snowplow_id then f.first_seen_at end)
+                over (partition by f.id_type, f.id_value)
+            >= max(case when f.active_snowplow_id != f.pick_snowplow_id then f.identity_created_at end)
+                over (partition by f.id_type, f.id_value),
+            true
+        ) as linked
+    from mlc_flagged f
 )
 
 -- Move rows of the identifiers that need it. A skipped identifier's rows keep
@@ -281,7 +307,7 @@ select * from combined
 -- out rewritten and emitted for an identifier we promised to leave alone.
 , mlc_repointed as (
     select
-        case when skipped or pick_snowplow_id != last_seen_snowplow_id then raw_snowplow_id
+        case when skipped or not linked then raw_snowplow_id
              else pick_snowplow_id end as active_snowplow_id,
         id_type,
         id_value,
@@ -291,9 +317,9 @@ select * from combined
         last_seen_at,
         first_seen_event_id,
         from_this_run
-            or (not skipped and pick_snowplow_id = last_seen_snowplow_id
+            or (not skipped and linked
                 and (resolved_changed or active_snowplow_id != pick_snowplow_id)) as changed
-    from mlc_flagged
+    from mlc_overlap
     where multi
 )
 

@@ -64,7 +64,7 @@ Setting var('snowplow__merge_limit_collapse') to true collapses those rows: for 
 
 Repairs happen the next time an identifier appears in a batch rather than retroactively, so existing rows clear over time; a full refresh from `snowplow__start_date` converges them at once.
 
-Two cases are left alone with the var on. An identifier whose identities have no `created_at` in `snowplow_identities_new_identities` cannot be ordered by age, so it waits until one does. An identifier whose most recent activity sits under a younger identity is not collapsed either, because that is what a TTL eviction looks like: the identifier was evicted from the older identity and now belongs to a newer one, and both rows are real history.
+Two cases are left alone with the var on. An identifier whose identities have no `created_at` in `snowplow_identities_new_identities` cannot be ordered by age, so it waits until one does. An identifier is collapsed only when its oldest identity is also the one it was last seen under, or when the oldest identity first saw it after the younger identity was created. The first covers a visitor who keeps coming back after the link. The second covers a short visit whose last events landed under the younger identity before the link was visible everywhere. An identifier that matches neither is left alone, because that is what a TTL eviction looks like: the identifier was held by the older identity before the newer one existed, and its recent activity sits under the newer one, so both rows are real history.
 {% enddocs %}
 
 
