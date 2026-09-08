@@ -60,6 +60,15 @@ macros:
       - name: col
         type: string
         description: Expression yielding an array, or null.
+  - name: bool_or_agg
+    description: >
+      Aggregate. True when the expression is true for any row in the group. The expression
+      must never be null: every dialect's native aggregate ignores null rows, so a group of
+      nothing but nulls comes back null rather than false. Dispatched per warehouse.
+    arguments:
+      - name: expr
+        type: string
+        description: Boolean expression evaluated per row, never null.
   - name: extract_merged
     description: >
       Flattens the cumulative `merged` array of a merge-events relation into one row per
