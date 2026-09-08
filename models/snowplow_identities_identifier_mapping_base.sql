@@ -31,6 +31,31 @@ You may obtain a copy of the Snowplow Personal and Academic License Version 1.0 
 {% set identifiers = var('snowplow__identifiers', [{'reference': 'domain_userid', 'alias': 'domain_userid'}, {'reference': 'user_id', 'alias': 'user_id'}]) %}
 {% set identifier_columns = identifiers | map(attribute='alias') | list %}
 
+{#
+  decision_reasons and has_healthy_sighting arrived after the table did, and the fold below
+  reads them back off this table. dbt builds the temp relation before it reconciles the
+  schema, so on the first run after the upgrade the columns are not there yet to read. Probe
+  for each and substitute a typed fallback when it is missing; append_new_columns adds them
+  during that same run, so the probe finds them from the second run on.
+
+  The probes default to present and only ever answer otherwise from a relation they read.
+  Neither fallback is reachable in a real run, where is_incremental() implies a stored
+  relation: they exist for a unit test, which forces is_incremental() true and replaces
+  `this` with a fixture -- a bare string, which no relation call accepts. That fixture
+  always carries the columns, so present is the correct answer there and the fold below
+  stays the plain expressions the tests pin.
+#}
+{%- set has_stored_reasons = true -%}
+{%- set has_stored_health = true -%}
+{%- if is_incremental() and this is not string -%}
+  {%- set dest_relation = load_relation(this) -%}
+  {%- if dest_relation is not none -%}
+    {%- set dest_cols = adapter.get_columns_in_relation(dest_relation) | map(attribute='name') | map('lower') | list -%}
+    {%- set has_stored_reasons = 'decision_reasons' in dest_cols -%}
+    {%- set has_stored_health = 'has_healthy_sighting' in dest_cols -%}
+  {%- endif -%}
+{%- endif -%}
+
 with new_events as (
     select
         snowplow_id,
@@ -40,7 +65,8 @@ with new_events as (
         event_id,
         app_id,
         derived_tstamp,
-        load_tstamp
+        load_tstamp,
+        decision_reasons
     from {{ ref('snowplow_identities_stg_identity_events') }} s
     where {{ snowplow_identities.get_incremental_filter('s') }}
     and snowplow_id is not null
@@ -58,10 +84,33 @@ unpivoted as (
         event_id,
         app_id,
         derived_tstamp,
-        load_tstamp
+        load_tstamp,
+        decision_reasons
     from new_events
     unpivot(id for col_name in ({{ identifier_columns | join(', ') }}))
     where id is not null
+),
+
+-- decision_reasons is reported on the event the engine made the decision on, while every
+-- other field below comes off the group's earliest event, so the reasons are unioned over
+-- the whole group instead. Two steps because BigQuery cannot aggregate arrays and
+-- deduplicate them in the same select. has_healthy_sighting rides along: the union alone
+-- cannot tell "every sighting was degraded" from "one degraded sighting among healthy
+-- ones", so whether any event escaped the degraded reasons is recorded separately. An
+-- event with no reasons at all is healthy (reason_contains treats null as absent).
+{%- set is_healthy_sighting -%}
+not ({{ snowplow_identities.reason_contains('decision_reasons', 'degraded_registry_only') }}
+    or {{ snowplow_identities.reason_contains('decision_reasons', 'degraded_deterministic') }})
+{%- endset %}
+reasons as (
+    select
+        snowplow_id,
+        id_type,
+        id_value,
+        {{ snowplow_identities.array_concat_agg('decision_reasons') }} as decision_reasons,
+        {{ snowplow_identities.bool_or_agg(is_healthy_sighting) }} as has_healthy_sighting
+    from unpivoted
+    group by 1, 2, 3
 ),
 
 -- Aggregate after hashing: lower/trim can collapse distinct raw values onto one hash.
@@ -91,16 +140,22 @@ this_run as (
         first_seen_at,
         last_seen_at,
         first_seen_event_id,
-        load_tstamp
+        load_tstamp,
+        {{ snowplow_identities.array_sort_distinct('decision_reasons') }} as decision_reasons,
+        has_healthy_sighting
     from ranked
+    inner join reasons using (snowplow_id, id_type, id_value)
     where rn = 1
 )
 
 {% if is_incremental() %}
 
 -- Widen the seen-at window against the stored row, keeping the app_id and event_id from
--- whichever side saw it first/last. Joined on the natural key (equivalent to id_key, which
--- is derived from it) so the fold stays unit testable.
+-- whichever side saw it first/last, and union the decision reasons so a reason recorded on
+-- one run survives every later run whose events carry none. has_healthy_sighting folds the
+-- same way: once true, always true, however degraded the runs that follow. Joined on the
+-- natural key (equivalent to id_key, which is derived from it) so the fold stays unit
+-- testable.
 , folded as (
     select
         n.id_key,
@@ -115,7 +170,13 @@ this_run as (
         greatest(n.last_seen_at, coalesce(t.last_seen_at, n.last_seen_at)) as last_seen_at,
         case when t.first_seen_at is not null and t.first_seen_at <= n.first_seen_at
              then t.first_seen_event_id else n.first_seen_event_id end as first_seen_event_id,
-        greatest(n.load_tstamp, coalesce(t.load_tstamp, n.load_tstamp)) as load_tstamp
+        greatest(n.load_tstamp, coalesce(t.load_tstamp, n.load_tstamp)) as load_tstamp,
+        {{ snowplow_identities.array_union(
+               'n.decision_reasons',
+               't.decision_reasons' if has_stored_reasons else 'cast(null as ' ~ snowplow_identities.reason_array_type() ~ ')'
+           ) }} as decision_reasons,
+        (n.has_healthy_sighting
+            or {{ 'coalesce(t.has_healthy_sighting, false)' if has_stored_health else 'false' }}) as has_healthy_sighting
     from this_run n
     left join {{ this }} t using (snowplow_id, id_type, id_value)
 )

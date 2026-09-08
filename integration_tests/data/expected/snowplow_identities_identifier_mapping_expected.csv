@@ -1,6 +1,7 @@
 active_snowplow_id,id_type,id_value,first_app_id,last_app_id,first_seen_at,last_seen_at,first_seen_event_id,mapping_state,is_preferred
 sp_2F2HIJWD5ZOX3J5OM3GW3NUQBA,domain_userid,duid_MLP_E,web,web,2020-01-03 00:00:01,2020-01-03 00:00:01,925dc593-c344-56b4-9c5f-17c82b08a847,multiple,false
 sp_2F2HIJWD5ZOX3J5OM3GW3NUQBA,network_userid,nuid_MLP_E,web,web,2020-01-03 00:00:01,2020-01-03 00:00:01,925dc593-c344-56b4-9c5f-17c82b08a847,multiple,false
+sp_2FOSUNN4TBTGDUGJQAA35AY5FG,domain_userid,duid_DS_E,web,web,2020-01-02 00:00:01,2020-01-02 00:00:01,ed15f6b0-1153-4830-baea-7d866b9e4a77,multiple,false
 sp_2OM2EBVGSZIXLK3V7RZ65A7IIU,domain_userid,duid_HFI_C1,web,web,2020-01-02 00:00:02,2020-01-02 00:00:10,b78d2a8b-78de-5074-8c7f-ca757e2c6946,single,true
 sp_2OM2EBVGSZIXLK3V7RZ65A7IIU,domain_userid,duid_HFI_C2,web,web,2020-01-02 00:00:03,2020-01-02 00:00:11,4f7e89aa-d5f9-5886-a388-a199a5b5ac16,single,true
 sp_2OM2EBVGSZIXLK3V7RZ65A7IIU,domain_userid,duid_HFI_C3,web,web,2020-01-02 00:00:04,2020-01-02 00:00:12,123623f7-6006-58db-8580-7c83c37a6a4d,single,true
@@ -109,6 +110,7 @@ sp_DNHC2JTM3ZKH7HCCD2FFBLFIVY,domain_userid,duid_DISJOINT_B,web,web,2020-01-02 0
 sp_DNHC2JTM3ZKH7HCCD2FFBLFIVY,network_userid,nuid_DISJOINT_A,web,web,2020-01-02 00:00:01,2020-01-02 00:00:05,9af08a14-992c-5d28-893a-ceef6718a989,single,true
 sp_DNHC2JTM3ZKH7HCCD2FFBLFIVY,network_userid,nuid_DISJOINT_B,web,web,2020-01-02 00:00:02,2020-01-02 00:00:02,e089ec42-1aa9-5a88-a424-1deca31d9e58,single,true
 sp_DNHC2JTM3ZKH7HCCD2FFBLFIVY,user_id,uid_DISJOINT_A,web,web,2020-01-02 00:00:01,2020-01-02 00:00:01,9af08a14-992c-5d28-893a-ceef6718a989,single,true
+sp_DZ32LX7WAFLFXACOGV7MAUZ4GT,domain_userid,duid_DS_E,web,web,2020-01-03 00:00:01,2020-01-03 00:00:01,2843ba5d-3ac0-4dcb-a7e6-7c80acd298a7,multiple,false
 sp_FF2KRPL3IFMTVM73HL36YDLHGA,domain_userid,duid_CHAIN_A,web,web,2020-01-02 00:00:01,2020-01-04 00:00:01,f947f398-00b7-590e-8140-e7beb9328f77,single,true
 sp_FF2KRPL3IFMTVM73HL36YDLHGA,domain_userid,duid_CHAIN_B,web,web,2020-01-02 00:00:02,2020-01-03 00:00:02,d65ecbbb-7cc3-5109-9262-246d36a56390,single,true
 sp_FF2KRPL3IFMTVM73HL36YDLHGA,domain_userid,duid_CHAIN_C,web,web,2020-01-03 00:00:01,2020-01-03 00:00:03,443540a4-c32f-5128-8ec8-a89fb0b51104,single,true
@@ -120,11 +122,12 @@ sp_GILCR4ZVSNMENJ3IFFIW6AQSVA,domain_userid,duid_ML_A,web,web,2020-01-02 00:00:0
 sp_GILCR4ZVSNMENJ3IFFIW6AQSVA,domain_userid,duid_ML_B,web,web,2020-01-02 00:00:02,2020-01-02 00:00:05,5d5861b6-12e4-53cc-a194-ab2373625f5d,single,true
 sp_GILCR4ZVSNMENJ3IFFIW6AQSVA,domain_userid,duid_ML_C,web,web,2020-01-02 00:00:03,2020-01-02 00:00:06,8093f0e4-47d2-5995-b0f5-c810b316b4ab,single,true
 sp_GILCR4ZVSNMENJ3IFFIW6AQSVA,domain_userid,duid_ML_D,web,web,2020-01-02 00:00:04,2020-01-02 00:00:07,af4bc232-dc34-5baa-8c18-1e323fa5d638,single,true
-sp_GILCR4ZVSNMENJ3IFFIW6AQSVA,domain_userid,duid_ML_E,web,web,2020-01-03 00:00:02,2020-01-04 00:00:01,5f980243-8e69-5c5f-9948-7c4f186326ee,multiple,false
+sp_GILCR4ZVSNMENJ3IFFIW6AQSVA,domain_userid,duid_ML_E,web,web,2020-01-03 00:00:02,2020-01-04 00:00:01,5f980243-8e69-5c5f-9948-7c4f186326ee,merge_limited,true
 sp_GILCR4ZVSNMENJ3IFFIW6AQSVA,network_userid,nuid_ML_E,web,web,2020-01-04 00:00:01,2020-01-04 00:00:01,f57e6c42-9f71-5844-834d-4ddf5052859d,multiple,false
 sp_GILCR4ZVSNMENJ3IFFIW6AQSVA,user_id,uid_ML_U1,web,web,2020-01-02 00:00:01,2020-01-03 00:00:02,05309b02-0d44-5360-8132-a2168d9ff7c0,single,true
-sp_GL7BJXWCMJPKFBDUV2QDZ4L3DI,domain_userid,duid_ML_E,web,web,2020-01-03 00:00:01,2020-01-03 00:00:01,d9456807-1fc0-5779-a2eb-0d677385def4,multiple,false
+sp_GL7BJXWCMJPKFBDUV2QDZ4L3DI,domain_userid,duid_ML_E,web,web,2020-01-03 00:00:01,2020-01-03 00:00:01,d9456807-1fc0-5779-a2eb-0d677385def4,merge_limited,false
 sp_GL7BJXWCMJPKFBDUV2QDZ4L3DI,network_userid,nuid_ML_E,web,web,2020-01-03 00:00:01,2020-01-03 00:00:01,d9456807-1fc0-5779-a2eb-0d677385def4,multiple,false
+sp_GMRKJVBBYJXHEM26THQS2MBEC6,domain_userid,duid_MLC_E,web,web,2020-01-03 00:00:01,2020-01-03 00:00:01,a516aa9a-13df-4577-b1ce-10bee45daa65,merge_limited,false
 sp_GTNZ6X2O4RO2VHD7ZXQZVAAYCE,domain_userid,duid_MLS_E,web,web,2020-01-03 00:00:01,2020-01-03 00:00:01,688c3d13-f18c-5535-9ba4-f382f84265ec,multiple,false
 sp_GTNZ6X2O4RO2VHD7ZXQZVAAYCE,domain_userid,duid_MLS_X,web,web,2020-01-04 00:00:01,2020-01-04 00:00:01,0ad2f8a9-9a12-5a03-a958-7cd384e33e90,single,true
 sp_GTNZ6X2O4RO2VHD7ZXQZVAAYCE,network_userid,nuid_MLS_E,web,web,2020-01-03 00:00:01,2020-01-04 00:00:01,688c3d13-f18c-5535-9ba4-f382f84265ec,single,true
@@ -219,6 +222,8 @@ sp_RTPROKOUEFNGLMZOKJUPARCS34,domain_userid,duid_RVCN_C,web,web,2020-01-02 00:00
 sp_RTPROKOUEFNGLMZOKJUPARCS34,network_userid,nuid_RVCN_A,web,web,2020-01-02 00:00:10,2020-01-02 00:00:10,f05ff38c-94da-59f2-816d-0f6f1d97f5c2,single,true
 sp_RTPROKOUEFNGLMZOKJUPARCS34,network_userid,nuid_RVCN_B,web,web,2020-01-02 00:00:05,2020-01-03 00:00:01,b705dd5e-9f66-54c8-a70f-ee92045ddbbf,single,true
 sp_RTPROKOUEFNGLMZOKJUPARCS34,network_userid,nuid_RVCN_C,web,web,2020-01-02 00:00:01,2020-01-04 00:00:01,aca7dd38-08cf-542e-8ae4-cfcae2ec44cd,single,true
+sp_RVO77DOT5WRP47J35DKIVZS6BD,domain_userid,duid_MLC_A,web,web,2020-01-02 00:00:01,2020-01-02 00:00:01,b2e5837d-9855-4249-8d50-bc3cb3fe6992,single,true
+sp_RVO77DOT5WRP47J35DKIVZS6BD,domain_userid,duid_MLC_E,web,web,2020-01-04 00:00:01,2020-01-04 00:00:01,7ac71dc6-c627-46b0-813d-c47fd4a94deb,merge_limited,true
 sp_TRK3PCI2MJKJRE2YRNP3L4Z3UI,domain_userid,duid_MLS_A,web,web,2020-01-02 00:00:01,2020-01-02 00:00:01,e7becdaf-3a63-5251-b367-26e3866e69d1,single,true
 sp_TRK3PCI2MJKJRE2YRNP3L4Z3UI,domain_userid,duid_MLS_B,web,web,2020-01-02 00:00:02,2020-01-02 00:00:05,a3902b6c-2184-5897-9e87-8ac06b5fa72c,single,true
 sp_TRK3PCI2MJKJRE2YRNP3L4Z3UI,domain_userid,duid_MLS_C,web,web,2020-01-02 00:00:03,2020-01-02 00:00:06,6a4ea026-4aa3-5df6-8e53-6c6081a20e45,single,true

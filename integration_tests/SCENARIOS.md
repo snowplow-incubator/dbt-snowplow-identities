@@ -147,3 +147,54 @@ Batch 1: A, B, C, D, E, F created.
 Batch 2: Sequential bridges with drain between each: A+B, B+C, C+D, D+E, E+F.
 Engine emits one cumulative merge event with all 5 children merged into A.
 Tests: deep chain in single batch, cumulative merge event at depth.
+
+### merge_limit
+Batch 1: A created (duid_ML_A, uid_ML_U1). B, C, D created. Bridge B→A, C→A, D→A, taking A to the 3-merge limit.
+Batch 2: E created (duid_ML_E, nuid_ML_E). Event `5f980243` then carries duid_ML_E + uid_ML_U1, which would merge E into A. A is at its limit, so the engine links instead and duid_ML_E ends up under both E and A.
+Batch 3: The E device sends duid_ML_E + nuid_ML_E again. duid_ML_E now resolves to A, so nuid_ML_E arrives under A too.
+Config: no unique identifier, so nothing but the limit blocks the merge. The refused event carries `decision_reasons` `["merge_limit_exceeded"]`.
+Tests: the reason names the identity the engine linked to, so duid_ML_E is labelled `merge_limited` under both owners and sp_GILCR4ZVSNMENJ3IFFIW6AQSVA — A, the identity that was at its limit — is preferred over sp_GL7BJXWCMJPKFBDUV2QDZ4L3DI, the identity created for the E device in batch 2. `mapping_state` describes the identifier rather than one owner of it, so both rows read `merge_limited` and only `is_preferred` separates them. The preference does not go through the recency heuristic: `snowplow__merge_limit_collapse` is left at its default `false` here, and before the event carried a reason both rows were `multiple` with neither preferred.
+
+nuid_ML_E stays `multiple` under both owners, and that asymmetry with duid_ML_E is deliberate. The flagged event carried duid_ML_E and uid_ML_U1 only, so nuid_ML_E rode on no event the engine explained; it reaches two owners through ordinary events in batches 2 and 3, which is exactly the ambiguity `multiple` exists to report. Do not close the gap by spreading a reason to the other identifiers of an owner — a reason is a fact about one event, and only the identifiers on that event were part of what the engine decided.
+
+uid_ML_U1 shows the other side of that grain. It rode on the flagged event, so it stores `merge_limit_exceeded` too, but it has one owner and is labelled `single`: `identity_count = 1` short-circuits ahead of the `merge_limited` branch. A rule keying off `decision_reasons` for a single-owner identifier would be reading a reason recorded about a different identifier's decision.
+
+### merge_limit_partial
+Batch 1: A created (duid_MLP_A, uid_MLP_U1). B, C, D created and bridged to A, taking it to the 3-merge limit. Batch 2: E created (duid_MLP_E, nuid_MLP_E), then duid_MLP_E + uid_MLP_U1 arrives under A. Batches 3-4: nuid_MLP_E, then duid_MLP_E again, arrive under A.
+Config: no unique identifier. No event carries `decision_reasons`.
+Tests: negative control for `merge_limit` — the same refused-merge shape with the reason absent leaves duid_MLP_E and nuid_MLP_E `multiple` under both owners and neither preferred, so the label comes from the reason and not from the shape.
+
+### merge_limit_tie
+Batch 1: A created (duid_MLT_A, uid_MLT_U1). B, C, D created and bridged to A, taking it to the 3-merge limit. Batch 2: E created (duid_MLT_E). Batch 3: duid_MLT_E + uid_MLT_U1 arrives under A at the same derived_tstamp as E's own event, carrying no reason.
+Config: no unique identifier. No event carries `decision_reasons`.
+Tests: both owners of duid_MLT_E hold last_seen_at 2020-01-03 00:00:08, so recency cannot separate them and the rank falls through to `created_at`, which can. The state is therefore `multiple` rather than `unranked`, and with `snowplow__merge_limit_collapse` at its default neither row is preferred.
+
+### ttl_reappear
+Batch 1: A created (duid_TTLR_A, nuid_TTLR_A). Batch 3: nuid_TTLR_A reappears alone under a new identity, A's state having expired from the engine.
+Tests: an identifier belonging to two identities with no merge and no reason. nuid_TTLR_A is `multiple` under both owners and neither is preferred — the expiry case that is indistinguishable from a refused merge unless the engine says which it was, which is what `merge_limited` exists to separate out.
+
+### merge_limit_split
+Batch 1: A created (duid_MLS_A, uid_MLS_U1). B, C, D created. Bridge B→A, C→A, D→A, taking A to the 3-merge limit.
+Batch 2: E created (duid_MLS_E, nuid_MLS_E). Event `05eb2b5c` then carries duid_MLS_E + uid_MLS_U1, which would merge E into A. A is at its limit, so the engine links instead and duid_MLS_E ends up under both E and A.
+Batch 3: duid_MLS_X arrives on E's nuid.
+Config: `(unique :user_id)`. The refused event carries `decision_reasons` `["merge_limit_exceeded", "unique_identifier_conflict"]`.
+Tests: a unique-identifier conflict occurring alongside a merge limit suppresses the `merge_limited` label, because the conflict means the two identities are legitimately separate and the limit alone must not name a winner. duid_MLS_E stays `multiple` under both owners and neither is preferred. Dropping `unique_identifier_conflict` from that event labels both duid_MLS_E rows `merge_limited` and prefers A, so the suppression is load-bearing rather than a fixture that changes nothing.
+
+Engine agreement, unverified and partly negative: the service would **not** emit both reasons for this event shape. `planOperations` only reaches `planConflictedResolution` when `detectUniqueIdentifierConflicts` finds more than one distinct unique-identifier value across the group's stored rows, registry and batch. Here uid_MLS_U1 is the only user_id in play (E carries none), so no conflict is flagged and the decision goes straight to `planMergeOrDowngrade`, which would record `merge_limit_exceeded` on its own. The two reasons *can* co-occur — `planConflictedResolution`'s default branch calls `planMergeOrDowngrade`, and that is where the limit blocks a merge — but only when the group is flagged as conflicted, carries exactly one unique value, and two or more of the resolved identities already store that same value, so that the merge the limit then blocks is between them. This scenario does not seed that shape; the reason pair is carried here to exercise the model's suppression guard. Read from `pkg/service/batch_processor.go` in the identity service, where `decision_reasons` does not exist yet, so this describes planned control flow rather than observed output.
+
+### merge_limit_chain
+Batch 1: A created (duid_MLC_A).
+Batch 2: B created for the E device. Its event `a516aa9a` carries duid_MLC_E and `decision_reasons` `["merge_limit_exceeded"]` — B was at its limit and linked the identifier in rather than merging.
+Batch 3: Event `7ac71dc6` carries duid_MLC_E under A with `["merge_limit_exceeded"]` again — A, also at its limit, refused to merge B in and linked the identifier. duid_MLC_E now sits under both owners, each carrying the label.
+Config: no unique identifier.
+Tests: two labelled owners, so the label alone no longer names one of them; the previous behaviour was `multiple` with neither preferred. The service always links into the oldest identity, and A (created batch 1) also holds duid_MLC_E's latest sighting (batch 3), which rules out a TTL eviction, so both rows are `merge_limited` and A is preferred over B — with `snowplow__merge_limit_collapse` left at its default `false`, because the collapse rests on the label, not the recency heuristic. The eviction shape this guard exists to exclude is unit-tested (`chained_eviction_falls_back`), as is the guard that collapses when the younger owner holds the latest sighting (`chained_short_visit_still_collapses`).
+
+Engine basis, unverified: `decision_reasons` comes from icecube PR #271, which is unmerged; the reason strings here are synthetic text in the fixture, and no running engine has been observed emitting two refusals for one identifier. The chained shape assumes each refusal is recorded on the event under the owner that refused, mirroring how `merge_limit` seeds a single refusal.
+
+### degraded_split
+Batch 1: A created; its event `ed15f6b0` carries duid_DS_E with no reasons — a healthy sighting.
+Batch 2: B created; its only event `2843ba5d` carries duid_DS_E with `decision_reasons` `["degraded_registry_only"]`, so B is tied to the identifier by nothing but a degraded sighting.
+Config: no unique identifier. `snowplow__merge_limit_collapse` left at its default `false`.
+Tests: duid_DS_E is `multiple` under both owners and neither is preferred, and B still counts as an owner — degraded sightings affect eligibility for preference, not `identity_count` or `mapping_state`. With the collapse var at its default nothing is preferred for a `multiple` identifier anyway, so the eligibility rule itself is invisible here; what this scenario pins is that `has_healthy_sighting` flows batch-by-batch through the base model without disturbing the mapping. The pick itself — a degraded-only owner skipped in favour of the next eligible one when the var is on — is unit-tested (`degraded_owner_skipped_by_collapse_pick`).
+
+Engine basis, unverified: the degraded reasons come from icecube PR #271, unmerged; the reason string is synthetic text in the fixture.
