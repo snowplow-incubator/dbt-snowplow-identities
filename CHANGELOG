@@ -53,6 +53,14 @@ Added
   a unique-identifier conflict applies to the same decision, and when more than one owner
   carries the reason. See MIGRATION.md: this changes `is_preferred` under the default
   configuration, so it is a breaking change for code matching on either column.
+- `has_healthy_sighting` on `snowplow_identities_identifier_mapping_base`: false only when
+  every sighting of the identifier under that identity carried a degraded reason, null for
+  rows last built before the upgrade. Identities tied to an identifier only by degraded
+  sightings are never marked preferred; a recorded refusal keeps its weight regardless.
+- An identifier whose owners both carry `merge_limit_exceeded` now resolves to the oldest
+  of them, when that identity also holds the latest sighting or first saw the identifier
+  after every other owner was created. Anything else keeps today's behaviour, so a TTL
+  eviction is never collapsed.
 
 Fixed
 - Merges no longer rewrite, re-point or delete identifier rows.
