@@ -135,4 +135,5 @@ SELECT
     superseded_at,
     change_type,
     (superseded_at IS NULL) AS is_current
+    {{ snowplow_identities.databricks_partition_date('effective_at') }}
 FROM final_scd

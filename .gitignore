@@ -22,3 +22,7 @@ dbt_internal_packages/
 .ionide
 
 .DS_Store
+
+# Python SQL regression tests
+__pycache__/
+.pytest_cache/

@@ -23,7 +23,9 @@ You may obtain a copy of the Snowplow Personal and Academic License Version 1.0 
     meta={'upsert_date_key': 'derived_tstamp', 'snowplow_optimize': true}
 ) }}
 
-select *
+select
+    *
+    {{ snowplow_identities.databricks_partition_date('derived_tstamp') }}
 
 from {{ ref('snowplow_identities_merge_events_this_run') }}
 where {{ snowplow_utils.is_run_with_new_events('snowplow_identities') }}

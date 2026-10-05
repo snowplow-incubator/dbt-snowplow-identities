@@ -24,6 +24,8 @@ with prep as (
             relation_alias=none,
             include_field_alias=false
         ) }} is not null
+    {% elif target.type in ['databricks', 'spark'] %}
+        get(contexts_com_snowplowanalytics_snowplow_identity_2, 0).snowplow_id is not null
     {% else %}
         contexts_com_snowplowanalytics_snowplow_identity_2 is not null
     {% endif %}

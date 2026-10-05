@@ -178,7 +178,10 @@ with new_from_this_run as (
 
 {% if not var('snowplow__merge_limit_collapse', false) %}
 
-select * from combined
+select
+    *
+    {{ snowplow_identities.databricks_partition_date('last_seen_at') }}
+from combined
 
 {% else %}
 
@@ -348,6 +351,7 @@ select
     first_seen_at,
     last_seen_at,
     first_seen_event_id
+    {{ snowplow_identities.databricks_partition_date('last_seen_at') }}
 from mlc_ranked
 where rn = 1
 and partition_changed = 1
@@ -367,6 +371,7 @@ select
     first_seen_at,
     last_seen_at,
     first_seen_event_id
+    {{ snowplow_identities.databricks_partition_date('last_seen_at') }}
 from mlc_flagged
 where not multi
 and from_this_run
