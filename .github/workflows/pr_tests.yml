@@ -12,6 +12,7 @@ concurrency: dbt_integration_tests
 env:
   # Set profiles.yml directory
   DBT_PROFILES_DIR: ./ci
+  DBT_SEND_ANONYMOUS_USAGE_STATS: "false"
 
   # Redshift Connection
   REDSHIFT_TEST_HOST: ${{ secrets.REDSHIFT_TEST_HOST }}
@@ -101,11 +102,11 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-pip-${{ matrix.dbt_version }}-${{ matrix.warehouse }}
 
-      # Install latest patch version. Upgrade if cache contains old patch version.
+      # Keep the dbt engine and adapters consistent with the validated versions.
       - name: Install dependencies
         run: |
-          pip install --upgrade pip wheel setuptools
-          pip install -Iv dbt-${{ matrix.warehouse }}==${{ matrix.dbt_version }} --upgrade
+          python -m pip install --upgrade pip wheel setuptools
+          python -m pip install "dbt-core==1.11.8" "dbt-${{ matrix.warehouse }}==${{ matrix.dbt_version }}"
           dbt deps
 
 
