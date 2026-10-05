@@ -13,7 +13,7 @@ A dbt package for building robust incremental identity resolution models from Sn
 - **Identifier Mapping**: Links external identifiers (domain_userid, user_id, etc.) to canonical Snowplow IDs
 - **Audit Trail**: Complete history of identity creation and merge events
 - **Incremental Processing**: Efficient delta updates using Snowplow's incremental framework
-- **Multi-Warehouse**: Optimized for BigQuery and Snowflake with extensibility for other platforms
+- **Multi-Warehouse**: Adapter-specific SQL for BigQuery, Snowflake and Databricks
 
 ## Core Models
 
@@ -36,13 +36,25 @@ The easiest way to get started is to follow our [QuickStart guide](https://docs.
 
 ### Adapter Support
 
-The current version of the snowplow-identities package supports BigQuery.
+The package includes adapters for BigQuery, Snowflake and Databricks.
+
+For Databricks, use `dbt-databricks` and a Databricks SQL warehouse or Runtime
+12.2 LTS or later (the models use `UNPIVOT`). The integration test adapter is
+pinned to `dbt-databricks==1.11.8`. Identity entities must be typed arrays of
+structs and merge events must be typed structs, as produced by the Snowplow
+Databricks loader. Incremental output tables use Delta and date partitions.
+
+Set `snowplow__databricks_catalog` to the catalog containing the source events
+(default: `hive_metastore`), and `snowplow__atomic_schema` to their schema.
+Configure the destination catalog and schema in the dbt Databricks profile.
+The `spark__` macros are shared through adapter dispatch; standalone Spark is
+not covered by this package's warehouse integration suite.
 
 ### Requirements
 
 - A dataset of web events from the [Snowplow JavaScript tracker][tracker-docs] must be available in the database.
 - Have the [`identity` context][identity-context] enabled.
-- dbt-core version 1.6.0 or greater
+- dbt-core version 1.10.6 or greater, below 2.0.0
 
 # Copyright and license
 

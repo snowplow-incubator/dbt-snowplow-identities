@@ -1,0 +1,33 @@
+version: 2
+
+unit_tests:
+  - name: test__new_identifiers__databricks_empty_contexts
+    description: Extract the first typed identity and ignore empty or null identity arrays.
+    model: snowplow_identities_new_identifiers_this_run
+    config:
+      enabled: "{{ target.type == 'databricks' }}"
+    given:
+      - input: ref('snowplow_identities_base_events_this_run')
+        format: sql
+        rows: |
+          select
+              event_id,
+              'web' as app_id,
+              'visitor' as domain_userid,
+              cast(null as string) as user_id,
+              cast(null as string) as network_userid,
+              cast('2026-01-01 00:00:00' as timestamp) as derived_tstamp,
+              cast('2026-01-01 00:00:00' as timestamp) as collector_tstamp,
+              from_json(identity_json, 'array<struct<snowplow_id:string,created_at:timestamp>>')
+                  as contexts_com_snowplowanalytics_snowplow_identity_2
+          from values
+              ('evt_valid', '[{"snowplow_id":"sp_first","created_at":"2026-01-01T00:00:00Z"},{"snowplow_id":"sp_second","created_at":"2026-01-01T00:00:00Z"}]'),
+              ('evt_empty', '[]'),
+              ('evt_null', cast(null as string))
+          as events(event_id, identity_json)
+    expect:
+      rows:
+        - snowplow_id: sp_first
+          id_type: domain_userid
+          id_value: visitor
+          first_seen_event_id: evt_valid
