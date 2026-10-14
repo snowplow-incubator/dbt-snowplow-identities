@@ -1,3 +1,5 @@
 snowplow-identities 0.1.0 (2026-YY-ZZ)
 ---------------------------------------
 Initial commit of package
+
+- Add Databricks field extraction, identifier hashing, partition-date columns and integration test coverage.

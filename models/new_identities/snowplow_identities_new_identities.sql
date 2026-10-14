@@ -60,11 +60,14 @@ select
     {% endfor %}
     case when old_is_earlier then prev_first_derived_tstamp else first_derived_tstamp end as first_derived_tstamp,
     case when old_is_later then prev_last_derived_tstamp else last_derived_tstamp end as last_derived_tstamp
+    {{ snowplow_identities.databricks_partition_date('case when old_is_earlier then prev_first_derived_tstamp else first_derived_tstamp end', alias='first_derived_tstamp') }}
 from merged
 
 {% else %}
 
-select *
+select
+    *
+    {{ snowplow_identities.databricks_partition_date('first_derived_tstamp') }}
 from {{ ref('snowplow_identities_new_identities_this_run') }}
 where {{ snowplow_utils.is_run_with_new_events('snowplow_identities') }}
 

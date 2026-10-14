@@ -10,7 +10,7 @@ do
   esac
 done
 
-declare -a SUPPORTED_DATABASES=("bigquery" "snowflake")
+declare -a SUPPORTED_DATABASES=("bigquery" "snowflake" "databricks")
 
 # set to lower case
 DATABASE="$(echo $DATABASE | tr '[:upper:]' '[:lower:]')"
@@ -39,7 +39,7 @@ for db in ${DATABASES[@]}; do
   done
 
   echo "snowplow-identities integration tests: Test models (merge limit collapse off)"
-  if [[ $db == "bigquery" ]]; then
+  if [[ $db != "snowflake" ]]; then
     eval "dbt test --exclude tag:snowflake_only tag:merge_limit_collapse --target $db" || exit 1;
   else
     eval "dbt test --exclude tag:merge_limit_collapse --target $db" || exit 1;
@@ -58,7 +58,7 @@ for db in ${DATABASES[@]}; do
   done
 
   echo "snowplow-identities integration tests: Test models (merge limit collapse on)"
-  if [[ $db == "bigquery" ]]; then
+  if [[ $db != "snowflake" ]]; then
     eval "dbt test --vars '{snowplow__merge_limit_collapse: true}' --exclude tag:snowflake_only tag:no_merge_limit_collapse --target $db" || exit 1;
   else
     eval "dbt test --vars '{snowplow__merge_limit_collapse: true}' --exclude tag:no_merge_limit_collapse --target $db" || exit 1;

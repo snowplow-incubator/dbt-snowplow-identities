@@ -40,7 +40,7 @@ vars:
     snowplow__events_table: snowplow_identities_events_stg
     snowplow__start_date: '2020-01-02'
     snowplow__backfill_limit_days: 1
-    snowplow__databricks_catalog: hive_metastore
+    snowplow__databricks_catalog: "{{ target.database if target.type == 'databricks' else 'hive_metastore' }}"
     snowplow__license_accepted: true
     snowplow__identifiers: [{'reference': 'domain_userid', 'alias': 'domain_userid'}, {'reference': 'user_id', 'alias': 'user_id'}, {'reference': 'network_userid', 'alias': 'network_userid'}]
     snowplow__app_id: []

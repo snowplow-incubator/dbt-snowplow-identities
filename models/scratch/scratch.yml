@@ -3,7 +3,7 @@ version: 2
 sources:
   # The _affected snapshot is written by a pre-hook on
   # snowplow_identities_snowplow_id_mapping via
-  # `CREATE OR REPLACE TABLE {{ this.schema }}.{{ this.identifier }}_affected`.
+  # a fully qualified relation in the model's database and schema.
   # Its schema must match the schema dbt resolves for that model —
   # target.schema + '_derived' under default generate_schema_name. If a
   # downstream user overrides generate_schema_name, both this declaration

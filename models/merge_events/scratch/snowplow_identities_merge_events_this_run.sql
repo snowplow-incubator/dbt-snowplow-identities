@@ -18,7 +18,7 @@ with prep as (
       event_id as merge_event_id
       {{ get_merge_fields() }},
       collector_tstamp,
-      derived_tstamp,
+      derived_tstamp
     from {{ ref('snowplow_identities_base_events_this_run') }}
     where event_name = 'identity_merge'
 )

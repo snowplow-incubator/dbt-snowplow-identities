@@ -22,14 +22,14 @@ You may obtain a copy of the Snowplow Personal and Academic License Version 1.0 
     },
     pre_hook=[
       "{% if is_incremental() %}
-         CREATE OR REPLACE TABLE {{ this.schema }}.{{ this.identifier }}_affected AS
+         CREATE OR REPLACE TABLE {{ this.incorporate(path={'identifier': this.identifier ~ '_affected'}) }} AS
          SELECT m.snowplow_id, m.active_snowplow_id, m.merged_at, m.model_tstamp
          FROM {{ this }} m
          WHERE m.active_snowplow_id IN (
              SELECT snowplow_id FROM {{ ref('snowplow_identities_snowplow_id_mapping_this_run') }}
          )
        {% else %}
-         CREATE OR REPLACE TABLE {{ this.schema }}.{{ this.identifier }}_affected (
+         CREATE OR REPLACE TABLE {{ this.incorporate(path={'identifier': this.identifier ~ '_affected'}) }} (
              snowplow_id STRING,
              active_snowplow_id STRING,
              merged_at TIMESTAMP,
@@ -40,7 +40,9 @@ You may obtain a copy of the Snowplow Personal and Academic License Version 1.0 
     meta={'upsert_date_key': 'merged_at', 'snowplow_optimize': true}
 ) }}
 
-select *
+select
+    *
+    {{ snowplow_identities.databricks_partition_date('merged_at') }}
 
 from {{ ref('snowplow_identities_snowplow_id_mapping_this_run') }}
 where {{ snowplow_utils.is_run_with_new_events('snowplow_identities') }}
