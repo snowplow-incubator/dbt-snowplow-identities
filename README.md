@@ -39,8 +39,7 @@ The easiest way to get started is to follow our [QuickStart guide](https://docs.
 The package includes adapters for BigQuery, Snowflake and Databricks.
 
 For Databricks, use `dbt-databricks` and a Databricks SQL warehouse or Runtime
-12.2 LTS or later (the models use `UNPIVOT`). The integration test adapter is
-pinned to `dbt-databricks==1.11.8`. Identity entities must be typed arrays of
+12.2 LTS or later (the models use `UNPIVOT`). Identity entities must be typed arrays of
 structs and merge events must be typed structs, as produced by the Snowplow
 Databricks loader. Incremental output tables use Delta and date partitions.
 

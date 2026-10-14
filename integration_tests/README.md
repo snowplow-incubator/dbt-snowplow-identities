@@ -26,7 +26,7 @@ Databricks uses `DATABRICKS_TEST_HOST`, `DATABRICKS_TEST_HTTP_PATH` and
 `DATABRICKS_TEST_TOKEN`. Set `DATABRICKS_TEST_CATALOG` for a Unity Catalog test
 catalog; the default is `hive_metastore`. The test identity needs permission to
 create and drop the isolated `gh_sp_identities_dbt_*` test schemas. CI uses
-Python 3.12 and adapter versions pinned in `pr_tests.yml`, with separate schemas
+Python 3.12 and the latest dbt Core and adapter 1.x releases, with separate schemas
 for each workflow run. Snowflake CI uses `SNOWFLAKE_TEST_PRIVATE_KEY`.
 
 Both default and merge-limit-collapse runs are tested. Snowflake-specific SQL

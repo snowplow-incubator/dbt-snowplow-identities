@@ -70,13 +70,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - warehouse: bigquery
-            dbt_version: "1.10.3"
-          - warehouse: snowflake
-            dbt_version: "1.10.8"
-          - warehouse: databricks
-            dbt_version: "1.11.8"
+        dbt_version: ["1.*"]
+        warehouse: [bigquery, snowflake, databricks]
 
     steps:
       - name: Check out
@@ -102,11 +97,11 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-pip-${{ matrix.dbt_version }}-${{ matrix.warehouse }}
 
-      # Keep the dbt engine and adapters consistent with the validated versions.
+      # Exercise new dbt 1.x releases so CI catches upstream regressions.
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip wheel setuptools
-          python -m pip install "dbt-core==1.11.8" "dbt-${{ matrix.warehouse }}==${{ matrix.dbt_version }}"
+          python -m pip install "dbt-core==${{ matrix.dbt_version }}" "dbt-${{ matrix.warehouse }}==${{ matrix.dbt_version }}"
           dbt deps
 
 
