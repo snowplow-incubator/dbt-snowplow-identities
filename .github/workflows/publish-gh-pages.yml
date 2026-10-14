@@ -55,7 +55,8 @@ jobs:
           dbt run --target snowflake --full-refresh --vars '{snowplow__allow_refresh: true, snowplow__backfill_limit_days: 243}'
       - name: Generate documentation
         run: |
-          dbt docs generate --target snowflake
+          dbt docs generate --target snowflake \
+            --vars "{snowplow__atomic_schema: gh_sp_identities_dbt_${SCHEMA_SUFFIX}_snplw_identities_int_tests}"
           mkdir -p docs-site
           cp target/catalog.json target/manifest.json target/run_results.json target/index.html docs-site/
       - name: Clean isolated test schemas
