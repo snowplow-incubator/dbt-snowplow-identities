@@ -8,7 +8,7 @@ Welcome to the model documentation site for the snowplow-identities dbt package.
 
 **For more information, including a QuickStart guide, operation and configuration, and implementing your own custom modules on top of this please visit the [Snowplow Docs](https://docs.snowplow.io/docs/modeling-your-data/modeling-your-data-with-dbt/).**
 
-*Note this model design doc site is linked to latest release of the package. If you are not using the latest release, [generate and serve](https://docs.getdbt.com/reference/commands/cmd-docs#dbt-docs-serve) the doc site locally for accurate documentation.*
+*Note this model design doc site is built from the main branch of the package. If you are not using the latest release, [generate and serve](https://docs.getdbt.com/reference/commands/cmd-docs#dbt-docs-serve) the doc site locally for accurate documentation.*
 
 ## Overview
 
@@ -20,7 +20,15 @@ Each module produces a table which acts as the input to the subsequent module (t
 
 ## Installation
 
-Check [dbt Hub](https://hub.getdbt.com/snowplow/snowplow_identities/latest/) for the latest installation instructions, or read the [dbt docs][dbt-package-docs] for more information on installing packages.
+Install the tagged release in `packages.yml`, then run `dbt deps`:
+
+```yaml
+packages:
+  - git: "https://github.com/snowplow-incubator/dbt-snowplow-identities.git"
+    revision: "0.1.0"
+```
+
+See the [dbt package documentation][dbt-package-docs] for more information.
 
 # Join the Snowplow community
 

@@ -1,5 +1,10 @@
-snowplow-identities 0.1.0 (2026-YY-ZZ)
----------------------------------------
-Initial commit of package
+snowplow_identities 0.1.0 (2026-10-14)
+------------------------------------
+Initial release of the Snowplow Identities dbt package.
 
-- Add Databricks field extraction, identifier hashing, partition-date columns and integration test coverage.
+- Build incremental identity and identifier mappings, identity-change history and SCD Type 2 mappings from Snowplow identity and merge events.
+- Support BigQuery, Snowflake and Databricks, including Databricks field extraction, identifier hashing and partition-date columns (#35; adapted from #24).
+- Include opt-in merge-limit collapse for overlapping identifier windows (#33). Enable it only when no identifier is configured as unique in the identity service.
+- Validate full-refresh and incremental runs with merge-limit collapse disabled and enabled on all three warehouses.
+
+Requires dbt Core >=1.10.6 and <2.0.0. Databricks requires SQL / Runtime 12.2 LTS or later and typed Snowplow identity entities. This is an early-development release; standalone Spark is not included in the tested adapter support.

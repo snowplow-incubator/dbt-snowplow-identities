@@ -20,7 +20,7 @@ A dbt package for building robust incremental identity resolution models from Sn
 | Model | Description |
 |-------|-------------|
 | `snowplow_identities_snowplow_id_mapping` | Current child → parent ID mappings |
-| `snowplow_identities_snowplow_id_mapping_snapshot` | SCD Type 2 history of ID mapping changes with valid_from/valid_to timestamps |
+| `snowplow_identities_id_mapping_scd` | SCD Type 2 history of ID mapping changes with effective_at/superseded_at timestamps |
 | `snowplow_identities_identifier_mapping` | External identifiers → active Snowplow ID lookup |
 | `snowplow_identities_id_changes` | Audit log of all identity lifecycle events |
 | `snowplow_identities_merge_events` | History of identity merge operations |
@@ -33,6 +33,17 @@ Please note that this data model is under the Snowplow Personal & Academic Licen
 ### Getting Started
 
 The easiest way to get started is to follow our [QuickStart guide](https://docs.snowplow.io/docs/modeling-your-data/modeling-your-data-with-dbt/dbt-quickstart/identities/).
+
+Install this release in `packages.yml`, then run `dbt deps`:
+
+```yaml
+packages:
+  - git: "https://github.com/snowplow-incubator/dbt-snowplow-identities.git"
+    revision: "0.1.0"
+```
+
+The [generated model documentation](https://snowplow-incubator.github.io/dbt-snowplow-identities/)
+is built from `main`; generate docs locally when you need the exact release's schema.
 
 ### Adapter Support
 
@@ -68,8 +79,8 @@ This distribution is all licensed under the [Snowplow Personal and Academic Lice
 [snowplow]: https://github.com/snowplow/snowplow
 [docs]: https://docs.snowplow.io/
 
-[release-image]: https://img.shields.io/github/v/release/snowplow/dbt-snowplow-identities?sort=semver
-[releases]: https://github.com/snowplow/dbt-snowplow-identities/releases
+[release-image]: https://img.shields.io/github/v/release/snowplow-incubator/dbt-snowplow-identities?sort=semver
+[releases]: https://github.com/snowplow-incubator/dbt-snowplow-identities/releases
 
 [tracker-classification]: https://docs.snowplow.io/docs/collecting-data/collecting-from-own-applications/tracker-maintenance-classification/
 [early-release]: https://img.shields.io/static/v1?style=flat&label=Snowplow&message=Early%20Release&color=014477&labelColor=9ba0aa&logo=data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAMAAAAoLQ9TAAAAeFBMVEVMaXGXANeYANeXANZbAJmXANeUANSQAM+XANeMAMpaAJhZAJeZANiXANaXANaOAM2WANVnAKWXANZ9ALtmAKVaAJmXANZaAJlXAJZdAJxaAJlZAJdbAJlbAJmQAM+UANKZANhhAJ+EAL+BAL9oAKZnAKVjAKF1ALNBd8J1AAAAKHRSTlMAa1hWXyteBTQJIEwRgUh2JjJon21wcBgNfmc+JlOBQjwezWF2l5dXzkW3/wAAAHpJREFUeNokhQOCA1EAxTL85hi7dXv/E5YPCYBq5DeN4pcqV1XbtW/xTVMIMAZE0cBHEaZhBmIQwCFofeprPUHqjmD/+7peztd62dWQRkvrQayXkn01f/gWp2CrxfjY7rcZ5V7DEMDQgmEozFpZqLUYDsNwOqbnMLwPAJEwCopZxKttAAAAAElFTkSuQmCC
