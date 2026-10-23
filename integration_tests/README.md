@@ -40,8 +40,8 @@ watermark advancement; those require the native dbt integration and unit tests.
 ## Upgrade validation
 
 The `pr_tests` manual workflow accepts `test_upgrade: true`. After the normal suite,
-it builds the published 0.1.0 package in another isolated schema, applies the two
-table drops documented in MIGRATION.md, then runs the candidate against that state.
+it builds the published 0.1.0 package in another isolated schema, applies the
+full refresh documented in MIGRATION.md to the populated 0.1.0 tables.
 It checks table-to-view conversion and compares the upgraded outputs with the same
 expected fixtures, including another incremental run for idempotency. Workflow
 cleanup removes both sets of test schemas.

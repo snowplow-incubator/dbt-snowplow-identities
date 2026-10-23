@@ -11,8 +11,8 @@ opt-in merge-limit behaviour. Review downstream filters and explicit column list
 
 | Table | Change | Action needed |
 | --- | --- | --- |
-| `snowplow_identities_snowplow_id_mapping` | Same grain and values. Gains `merge_event_id`, `triggering_event_id` and `load_tstamp`; now partitioned on `load_tstamp` rather than `merged_at` | Drop the table first; see [Tables you must drop before the first run](#tables-you-must-drop-before-the-first-run) |
-| `snowplow_identities_merge_events` | Same grain and values. Gains `load_tstamp`; now partitioned on `load_tstamp` rather than `derived_tstamp` | Drop the table first; see [Tables you must drop before the first run](#tables-you-must-drop-before-the-first-run) |
+| `snowplow_identities_snowplow_id_mapping` | Same grain and values. Gains `merge_event_id`, `triggering_event_id` and `load_tstamp`; now partitioned on `load_tstamp` rather than `merged_at` | Rebuild with the package-scoped full refresh below |
+| `snowplow_identities_merge_events` | Same grain and values. Gains `load_tstamp`; now partitioned on `load_tstamp` rather than `derived_tstamp` | Rebuild with the package-scoped full refresh below |
 | `snowplow_identities_identifier_mapping` | Now a **view** over immutable rows, with lowercase `id_type` and new `mapping_state` / `is_preferred` columns. The collapse option selects a preferred owner without deleting other owners. | Update case-sensitive filters; filter `is_preferred` only when the heuristic is appropriate |
 | `snowplow_identities_new_identities` | Renamed to `snowplow_identities_identities`; per-identifier columns removed | Update references; see [Rebuilding the wide identity row](#rebuilding-the-wide-identity-row) |
 | `snowplow_identities_id_changes` | **Removed** | See [Rebuilding id_changes](#rebuilding-id_changes) |
@@ -50,52 +50,46 @@ Config that is new:
 | `snowplow__partition_tstamp_type` | `timestamp` | `timestamp` or `date`, matching the above column's type. |
 | `snowplow__partition_buffer_days` | 2 | Extra days on the prune predicate to absorb collector-to-load lag. |
 
-### Tables you must drop before the first run
+### Rebuild the package on the first run
 
-`snowplow_id_mapping` and `merge_events` keep their names, grain and values, and every
-column they had before. But both change shape in ways dbt cannot apply to a table that
-already exists, so upgrading in place does not work:
+The existing `snowplow_id_mapping` and `merge_events` tables gain `load_tstamp` and
+change their partition key. Appending columns alone would leave old rows with null
+watermarks and would not repartition the tables. `identifier_mapping` also changes
+from a table to a view. In particular, BigQuery rejects that conversion during a
+normal run; it requires a full refresh or a manual drop.
 
-- `load_tstamp` is a new column on both. `on_schema_change: append_new_columns` adds it to
-  the existing rows as `NULL`, and both models now test `load_tstamp` `not_null`. Every
-  pre-upgrade row would fail that test until the backfill in step 3 overwrote it.
-- The partition column changes to `load_tstamp`, from `merged_at` and `derived_tstamp`, because
-  that is the column each model now watermarks and filters on. dbt does not repartition an
-  existing incremental table. Depending on the adapter you either keep the old partitioning
-  and lose pruning on the column the model now scans, or the run fails on the mismatch.
+Use a package-scoped full refresh for the initial upgrade so dbt handles both
+repartitioning and table-to-view conversion. This rebuilds the package's outputs
+from `atomic.events`. Historical completeness therefore requires all necessary
+identity and merge events to be available from `snowplow__start_date`. Check source
+retention and back up the 0.1.0 tables first. If history has expired, retain the old
+tables and establish a migration plan before upgrading; missing events cannot be
+reconstructed by the new models.
 
-So drop both and let dbt rebuild them:
-
-```sql
-drop table if exists <derived_schema>.snowplow_identities_snowplow_id_mapping;
-drop table if exists <derived_schema>.snowplow_identities_merge_events;
-```
-
-Both are rebuilt from `atomic.events` by the backfill in step 3. This preserves history
-only if all required identity and merge events are still available from
-`snowplow__start_date`. Check source retention and back up existing outputs before dropping
-anything. If history has expired, retain the old tables and establish a migration plan
-before upgrading; the new models cannot reconstruct missing events.
-
-`identifier_mapping` needs no manual step, because dbt replaces the old table with the view.
-`new_identities` is superseded by `identities`, so the old table is left behind for you to
-drop in step 4.
+The removed tables and renamed `new_identities` are left behind until you choose
+to drop them after validation.
 
 ### Upgrade steps
 
 1. **Bump the package version** in your `packages.yml`.
 
-2. **Drop `snowplow_id_mapping` and `merge_events`**, per
-   [Tables you must drop before the first run](#tables-you-must-drop-before-the-first-run).
+2. **Back up the existing outputs and confirm source retention**, per
+   [Rebuild the package on the first run](#rebuild-the-package-on-the-first-run).
 
-3. **Expect one backfill.** Every derived model now carries a `load_tstamp` column that
-   did not exist before, so on the first run each model's watermark resolves to
-   `snowplow__start_date` and history is replayed from there, advancing
-   `snowplow__backfill_limit_days` per run. With the default 30-day limit and a start
-   date a year back, that is about 12 runs. To compress it, raise the limit temporarily:
+3. **Run one full refresh, then finish the backfill incrementally.** The first run
+   rebuilds from `snowplow__start_date`. Set a backfill window that covers the required
+   history where practical, for example:
 
    ```bash
-   dbt run --vars '{snowplow__backfill_limit_days: 400}'
+   dbt run --full-refresh --select package:snowplow_identities --vars '{snowplow__backfill_limit_days: 400}'
+   ```
+
+   If more history remains, run again **without** `--full-refresh` to advance. Repeating
+   the full-refresh flag restarts from the beginning. Keep the first window large enough
+   to reach actual identity-context events; an empty staging window cannot advance itself.
+
+   ```bash
+   dbt run --select package:snowplow_identities --vars '{snowplow__backfill_limit_days: 400}'
    ```
 
    Each run logs exactly what it is processing, so you can watch progress:
@@ -129,8 +123,8 @@ drop in step 4.
    drop table if exists <scratch_schema>.snowplow_identities_id_changes_this_run;
    ```
 
-   dbt replaces the old `identifier_mapping` table with the view automatically, so that
-   one needs no manual step.
+   The initial full refresh replaces `identifier_mapping` with the view, so it does
+   not need a separate manual drop.
 
 ### Sparse event streams no longer stall a model
 

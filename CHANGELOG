@@ -9,7 +9,8 @@ Breaking changes
   per-identifier columns removed. Those values live in
   `snowplow_identities_identifier_mapping` at the identifier grain.
 - `snowplow_identities_snowplow_id_mapping` and `snowplow_identities_merge_events` gain a
-  `load_tstamp` column and are now partitioned on it. Drop both before the first run.
+  `load_tstamp` column and are now partitioned on it. Run a package-scoped full refresh
+  for the initial upgrade; this also converts the existing identifier table to a view.
 - `snowplow__allow_refresh`, `snowplow__dev_target_name` and the `models_to_remove` var are
   removed with the manifest. `--full-refresh` now rebuilds from `snowplow__start_date`.
 

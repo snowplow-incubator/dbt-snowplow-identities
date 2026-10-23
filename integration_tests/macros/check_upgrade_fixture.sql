@@ -1,6 +1,6 @@
-{% macro prepare_upgrade_fixture() %}
+{% macro check_upgrade_fixture() %}
   {% if not target.schema.startswith('gh_sp_identities_dbt_') or not target.schema.endswith('_upgrade') %}
-    {{ exceptions.raise_compiler_error('Upgrade fixture preparation requires an isolated CI upgrade schema.') }}
+    {{ exceptions.raise_compiler_error('Upgrade fixture checks requires an isolated CI upgrade schema.') }}
   {% endif %}
 
   {% set mapping = ref('snowplow_identities_identifier_mapping') %}
@@ -19,6 +19,5 @@
     {% if old is none %}
       {{ exceptions.raise_compiler_error('Missing 0.1.0 upgrade fixture: ' ~ model) }}
     {% endif %}
-    {% do adapter.drop_relation(old) %}
   {% endfor %}
 {% endmacro %}
