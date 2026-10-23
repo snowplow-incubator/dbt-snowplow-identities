@@ -22,11 +22,13 @@ macros:
       - name: anchor
         type: bool
         description: >
-          Extend the window's upper bound to snowplow_identities_stg_identity_events'
-          watermark when the model's own is behind it. Leave true for every model except
-          stg_identity_events itself, which is the anchor. Without it a model whose events
-          are sparser than snowplow__backfill_limit_days strands itself, since an empty
-          window leaves its watermark, and therefore the window, unchanged.
+          Extend the upper bound through the selected upstream anchor's watermark.
+      - name: anchor_model
+        type: string
+        description: Upstream model used as the anchor; defaults to identity staging. Root mapping uses the merge log.
+      - name: atomic_event
+        type: string
+        description: Set to identity or merge for atomic readers to seek the first eligible day after a gap.
   - name: extract_merged
     description: >
       Flattens the cumulative `merged` array of a merge-events relation into one row per

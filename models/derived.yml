@@ -137,7 +137,7 @@ models:
       - name: triggering_event_id
         description: 'The event that triggered this identity''s merge. Stable across cumulative re-reports of the edge.'
       - name: load_tstamp
-        description: 'The load_tstamp of the merge event carrying this edge. This model self-watermarks off its max.'
+        description: 'The newest load_tstamp contributing this mapping or a subsequent root change. This model self-watermarks off its max.'
         tests:
           - not_null
       - name: model_tstamp

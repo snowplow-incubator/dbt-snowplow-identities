@@ -11,7 +11,7 @@ opt-in merge-limit behaviour. Review downstream filters and explicit column list
 
 | Table | Change | Action needed |
 | --- | --- | --- |
-| `snowplow_identities_snowplow_id_mapping` | Same grain and values. Gains `merge_event_id`, `triggering_event_id` and `load_tstamp`; now partitioned on `load_tstamp` rather than `merged_at` | Rebuild with the package-scoped full refresh below |
+| `snowplow_identities_snowplow_id_mapping` | Same child-to-root grain; delayed merges now preserve current roots. Gains `merge_event_id`, `triggering_event_id` and `load_tstamp`; now partitioned on `load_tstamp` rather than `merged_at` | Rebuild with the package-scoped full refresh below |
 | `snowplow_identities_merge_events` | Same grain and values. Gains `load_tstamp`; now partitioned on `load_tstamp` rather than `derived_tstamp` | Rebuild with the package-scoped full refresh below |
 | `snowplow_identities_identifier_mapping` | Now a **view** over immutable rows, with lowercase `id_type` and new `mapping_state` / `is_preferred` columns. The collapse option selects a preferred owner without deleting other owners. | Update case-sensitive filters; filter `is_preferred` only when the heuristic is appropriate |
 | `snowplow_identities_new_identities` | Renamed to `snowplow_identities_identities`; per-identifier columns removed | Update references; see [Rebuilding the wide identity row](#rebuilding-the-wide-identity-row) |
@@ -93,7 +93,7 @@ to drop them after validation.
    dbt run --select package:snowplow_identities --vars '{snowplow__backfill_limit_days: 400}'
    ```
 
-   Each run logs exactly what it is processing, so you can watch progress:
+   Incremental runs log their resolved processing bounds, so you can watch progress:
 
    ```
    Snowplow: snowplow_identities_identities at watermark 2026-07-14 -- processing load_tstamp from 2026-07-14 to 2026-08-14

@@ -33,15 +33,17 @@ python -m pytest python -q
 
 These render package SQL, parse it as Databricks SQL and execute translated queries
 in DuckDB against the existing mapping fixtures. They also check partition-column
-projection, normalized hashing, and typed empty/null identity and merge payloads.
-They do not validate warehouse materializations, permissions, runtime planning or
-watermark advancement; those require the native dbt integration and unit tests.
+projection, normalized hashing, typed empty/null payloads, and the real window predicates
+for sparse streams and delayed merges.
+They do not validate warehouse materializations, permissions, runtime planning; those require the native dbt integration and unit tests.
 
 ## Upgrade validation
 
-The `pr_tests` manual workflow accepts `test_upgrade: true`. After the normal suite,
+PR checks include upgrade validation; manual runs can request it with `test_upgrade: true`.
+After the normal suite,
 it builds the published 0.1.0 package in another isolated schema, applies the
-full refresh documented in MIGRATION.md to the populated 0.1.0 tables.
+full refresh documented in MIGRATION.md to the populated 0.1.0 tables. Before that,
+it verifies an ordinary incremental upgrade is rejected and retains the old tables.
 It checks table-to-view conversion and compares the upgraded outputs with the same
 expected fixtures, including another incremental run for idempotency. Workflow
 cleanup removes both sets of test schemas.

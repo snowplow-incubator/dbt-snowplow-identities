@@ -1,7 +1,7 @@
 {# Fail before changing any outputs when a 0.1.0 installation needs rebuilding. #}
 {% macro check_upgrade() %}
+  {% set expected = ref('snowplow_identities_merge_events') %}
   {% if execute and flags.WHICH in ['run', 'build'] and not flags.FULL_REFRESH %}
-    {% set expected = ref('snowplow_identities_merge_events') %}
     {% set existing = adapter.get_relation(database=expected.database, schema=expected.schema, identifier=expected.identifier) %}
     {% if existing is not none %}
       {% set names = adapter.get_columns_in_relation(existing) | map(attribute='name') | map('lower') | list %}
