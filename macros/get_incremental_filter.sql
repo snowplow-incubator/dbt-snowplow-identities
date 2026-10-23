@@ -96,14 +96,28 @@ You may obtain a copy of the Snowplow Personal and Academic License Version 1.0 
   {%- if atomic_event is not none -%}
     {# Seek the FIRST eligible day, never the source maximum: a gap must not turn
        a bounded backfill into a scan of every remaining populated day. #}
-    {%- set available = snowplow_identities.next_atomic_day(atomic_event, next_day) -%}
+    {%- set available = snowplow_identities.next_atomic_day(atomic_event, next_day, upper_day) -%}
     {%- set available_end = dbt.dateadd('day', 1, available) -%}
     {%- set upper_day = 'greatest(' ~ upper_day ~ ', coalesce(' ~ available_end ~ ', ' ~ upper_day ~ '))' -%}
   {%- endif -%}
   {{ return(upper_day) }}
 {% endmacro %}
 
-{% macro next_atomic_day(event_kind, lower_day) %}
+{% macro next_atomic_day(event_kind, lower_day, upper_day) %}
+  {# On normal populated backfill windows, avoid searching the entire remaining
+     source history. Unit tests render the equivalent SQL lookup without issuing
+     compile-time queries against live warehouse relations. #}
+  {%- if execute and flags.WHICH in ['run', 'build'] -%}
+    {%- set probe = snowplow_identities.atomic_day_query(event_kind, lower_day, upper_day) -%}
+    {%- set result = run_query('select ' ~ probe ~ ' as next_day') -%}
+    {%- if result and result.rows[0][0] is not none -%}
+      {{ return("cast('" ~ result.rows[0][0] ~ "' as date)") }}
+    {%- endif -%}
+  {%- endif -%}
+  {{ return(snowplow_identities.atomic_day_query(event_kind, lower_day)) }}
+{% endmacro %}
+
+{% macro atomic_day_query(event_kind, lower_day, upper_day=none) %}
   {%- set partition_col = var('snowplow__partition_tstamp', 'load_tstamp') -%}
   {%- set partition_type = var('snowplow__partition_tstamp_type', 'timestamp') | lower -%}
   {%- set sql -%}
@@ -111,8 +125,14 @@ You may obtain a copy of the Snowplow Personal and Academic License Version 1.0 
       select {% if event_kind == 'identity' %}{{ snowplow_identities.get_identity_fields() }}{% endif %} load_tstamp
       from {{ source('atomic', 'events') }}
       where load_tstamp >= cast({{ lower_day }} as timestamp)
+      {% if upper_day is not none %}
+      and load_tstamp < cast({{ upper_day }} as timestamp)
+      {% endif %}
       {% if partition_col != 'load_tstamp' %}
       and {{ partition_col }} >= cast({{ dbt.dateadd('day', -var('snowplow__partition_buffer_days', 2), lower_day) }} as {{ partition_type }})
+      {% if upper_day is not none %}
+      and {{ partition_col }} < cast({{ dbt.dateadd('day', var('snowplow__partition_buffer_days', 2), upper_day) }} as {{ partition_type }})
+      {% endif %}
       {% endif %}
       {% if event_kind == 'identity' %}
       and {{ snowplow_utils.app_id_filter(var('snowplow__app_id', [])) }}

@@ -140,8 +140,9 @@ rows follow identity staging; the child-to-root mapping follows the merge log. A
 period therefore does not depend on new identity-context events. Lower bounds retain each
 model's own watermark and configured lookback, so a failed downstream model catches up.
 
-The source-day lookup reads eligible source timestamps beyond the current batch. That
-adds source-read work, particularly during a sparse historical backfill; the backfill
+A bounded probe checks the normal forward window first. Only when it is empty does
+the source-day lookup search eligible timestamps beyond the batch. This adds read work
+during a sparse historical backfill; the backfill
 setting limits populated days processed, not a guarantee on bytes scanned. Benchmark
 warehouse usage on representative data before switching production consumers.
 
