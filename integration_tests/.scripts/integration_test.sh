@@ -10,7 +10,7 @@ do
   esac
 done
 
-declare -a SUPPORTED_DATABASES=("bigquery" "snowflake")
+declare -a SUPPORTED_DATABASES=("bigquery" "snowflake" "databricks")
 
 # set to lower case
 DATABASE="$(echo $DATABASE | tr '[:upper:]' '[:lower:]')"
@@ -26,6 +26,7 @@ for db in ${DATABASES[@]}; do
   echo "snowplow-identities integration tests: Seeding data"
   eval "dbt seed --full-refresh --target $db" || exit 1;
 
+  # Leg 1: retain every immutable mapping, without selecting a preferred owner.
   echo "snowplow-identities integration tests: Execute models - run 1/4 (full refresh)"
   eval "dbt run --full-refresh --vars '{snowplow__backfill_limit_days: 1}' --target $db" || exit 1;
 
@@ -35,12 +36,21 @@ for db in ${DATABASES[@]}; do
     eval "dbt run --target $db" || exit 1;
   done
 
-  echo "snowplow-identities integration tests: Test models"
-  if [[ $db == "bigquery" ]]; then
-    eval "dbt test --exclude tag:snowflake_only --target $db" || exit 1;
-  else
-    eval "dbt test --target $db" || exit 1;
-  fi
+  echo "snowplow-identities integration tests: Test models (merge limit collapse off)"
+  dbt test --target "$db" || exit 1
+
+  # Leg 2: keep the same rows and validate the opt-in preferred-owner flags.
+  echo "snowplow-identities integration tests: Execute models with merge limit collapse - run 1/4 (full refresh)"
+  eval "dbt run --full-refresh --vars '{snowplow__merge_limit_collapse: true, snowplow__backfill_limit_days: 1}' --target $db" || exit 1;
+
+  for i in {2..4}
+  do
+    echo "snowplow-identities integration tests: Execute models with merge limit collapse - run $i/4"
+    eval "dbt run --vars '{snowplow__merge_limit_collapse: true}' --target $db" || exit 1;
+  done
+
+  echo "snowplow-identities integration tests: Test models (merge limit collapse on)"
+  dbt test --vars '{snowplow__merge_limit_collapse: true}' --target "$db" || exit 1
 
   echo "snowplow-identities integration tests: All tests passed"
 

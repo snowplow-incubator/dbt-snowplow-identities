@@ -50,4 +50,5 @@ select
     merged,
     merges,
     load_tstamp
+    {{ snowplow_identities.databricks_partition_date('load_tstamp') }}
 from prep

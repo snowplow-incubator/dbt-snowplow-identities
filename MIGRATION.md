@@ -3,8 +3,9 @@
 ## Upgrading to 0.2.0
 
 This release removes two output tables, renames a third, and rebuilds
-`snowplow_identities_identifier_mapping` as a view. That view keeps the old name, columns and
-grain, so most consumers need no changes.
+`snowplow_identities_identifier_mapping` as a view. The view keeps its name and resolved-identifier grain, but adds
+`mapping_state` and `is_preferred`, normalizes `id_type` to lowercase and changes the
+opt-in merge-limit behaviour. Review downstream filters and explicit column lists.
 
 ### What changed
 
@@ -12,7 +13,7 @@ grain, so most consumers need no changes.
 | --- | --- | --- |
 | `snowplow_identities_snowplow_id_mapping` | Same grain and values. Gains `merge_event_id`, `triggering_event_id` and `load_tstamp`; now partitioned on `load_tstamp` rather than `merged_at` | Drop the table first; see [Tables you must drop before the first run](#tables-you-must-drop-before-the-first-run) |
 | `snowplow_identities_merge_events` | Same grain and values. Gains `load_tstamp`; now partitioned on `load_tstamp` rather than `derived_tstamp` | Drop the table first; see [Tables you must drop before the first run](#tables-you-must-drop-before-the-first-run) |
-| `snowplow_identities_identifier_mapping` | Now a **view** over a new table. Same columns, same grain, same values. | None for consumers |
+| `snowplow_identities_identifier_mapping` | Now a **view** over immutable rows, with lowercase `id_type` and new `mapping_state` / `is_preferred` columns. The collapse option selects a preferred owner without deleting other owners. | Update case-sensitive filters; filter `is_preferred` only when the heuristic is appropriate |
 | `snowplow_identities_new_identities` | Renamed to `snowplow_identities_identities`; per-identifier columns removed | Update references; see [Rebuilding the wide identity row](#rebuilding-the-wide-identity-row) |
 | `snowplow_identities_id_changes` | **Removed** | See [Rebuilding id_changes](#rebuilding-id_changes) |
 | `snowplow_identities_id_mapping_scd` | **Removed** | See [Rebuilding id_mapping_scd](#rebuilding-id_mapping_scd) |
@@ -70,8 +71,11 @@ drop table if exists <derived_schema>.snowplow_identities_snowplow_id_mapping;
 drop table if exists <derived_schema>.snowplow_identities_merge_events;
 ```
 
-Nothing is lost. Both are rebuilt from `atomic.events` by the backfill in step 3, which
-replays from `snowplow__start_date` anyway.
+Both are rebuilt from `atomic.events` by the backfill in step 3. This preserves history
+only if all required identity and merge events are still available from
+`snowplow__start_date`. Check source retention and back up existing outputs before dropping
+anything. If history has expired, retain the old tables and establish a migration plan
+before upgrading; the new models cannot reconstruct missing events.
 
 `identifier_mapping` needs no manual step, because dbt replaces the old table with the view.
 `new_identities` is superseded by `identities`, so the old table is left behind for you to
@@ -101,7 +105,8 @@ drop in step 4.
    ```
 
    Until the backfill completes, the tables only cover the period processed so far.
-   Nothing is lost. Every row is rebuilt from `atomic.events`.
+   Historical completeness depends on the retained source events. Validate the backfilled
+   outputs against the saved 0.1.0 tables before switching downstream consumers.
 
 4. **Drop the old tables** once you are happy, since dbt no longer manages them:
 
@@ -135,8 +140,8 @@ the watermark does not move, and the next run recomputes the same window. This m
 for `merge_events` and `snowplow_id_mapping`, which advance off `identity_merge` events only.
 Those are far sparser than identity events, and often more than a day apart.
 
-Identity context events are dense, so `snowplow_identities_stg_identity_events` always has
-current data. Every other model uses its watermark as an anchor:
+This design assumes identity context events are frequent enough for
+`snowplow_identities_stg_identity_events` to advance within its backfill window. Every other model uses its watermark as an anchor:
 
 - The lower bound is always the model's own watermark, so a model that errors re-scans its
   last window rather than skipping it. The manifest gave you that by taking the minimum across
@@ -152,7 +157,9 @@ to where staging has reached. That scan is pruned on `load_tstamp` and `event_na
 `atomic.events` is usually partitioned or clustered on, and it collapses as soon as a merge
 lands.
 
-One case this does not cover. If `snowplow__start_date` is well before your data begins, the
+The anchor itself cannot advance through an empty window. This affects both an initial
+start date before the data begins and later gaps longer than the backfill window. If
+`snowplow__start_date` is well before your data begins, the
 anchor's own first window is empty and it stalls too. The manifest framework did the same, so
 this is not new, but set `snowplow__start_date` near the start of your data.
 
@@ -208,8 +215,8 @@ than collapsing to one per type. If you want the old wide shape, pivot the mappi
 with identifiers as (
     select
         active_snowplow_id,
-        max(case when id_type = 'DOMAIN_USERID' then id_value end) as domain_userid,
-        max(case when id_type = 'USER_ID' then id_value end) as user_id
+        max(case when id_type = 'domain_userid' then id_value end) as domain_userid,
+        max(case when id_type = 'user_id' then id_value end) as user_id
     from {{ ref('snowplow_identities_identifier_mapping') }}
     group by 1
 )

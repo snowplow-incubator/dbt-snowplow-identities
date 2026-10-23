@@ -27,7 +27,7 @@ unit_tests:
           select
             'mev-001' as merge_event_id,
             'sp_AAAA' as active_snowplow_id,
-            {% if target.type == 'bigquery' %}[struct(cast(null as timestamp) as created_at, timestamp '2025-12-18 10:02:00' as merged_at, 'sp_BBBB' as snowplow_id, 'evt-001' as triggering_event_id)]{% else %}parse_json('[{"snowplow_id":"sp_BBBB","merged_at":"2025-12-18 10:02:00","triggering_event_id":"evt-001"}]'){% endif %} as merged,
+            {% if target.type == 'bigquery' %}[struct(cast(null as timestamp) as created_at, timestamp '2025-12-18 10:02:00' as merged_at, 'sp_BBBB' as snowplow_id, 'evt-001' as triggering_event_id)]{% elif target.type in ['databricks', 'spark'] %}from_json('[{"snowplow_id":"sp_BBBB","merged_at":"2025-12-18 10:02:00","triggering_event_id":"evt-001"}]', 'array<struct<snowplow_id:string,created_at:timestamp,merged_at:timestamp,triggering_event_id:string>>'){% else %}parse_json('[{"snowplow_id":"sp_BBBB","merged_at":"2025-12-18 10:02:00","triggering_event_id":"evt-001"}]'){% endif %} as merged,
             cast('2025-12-18 10:02:00.000' as timestamp) as collector_tstamp,
             cast('2025-12-18 10:02:00.000' as timestamp) as derived_tstamp,
             cast('2025-12-18 11:00:00.000' as timestamp) as load_tstamp
@@ -58,7 +58,7 @@ unit_tests:
           select
             'mev-001' as merge_event_id,
             'sp_AAAA' as active_snowplow_id,
-            {% if target.type == 'bigquery' %}[struct(cast(null as timestamp) as created_at, timestamp '2025-12-18 10:02:00' as merged_at, 'sp_BBBB' as snowplow_id, 'evt-001' as triggering_event_id)]{% else %}parse_json('[{"snowplow_id":"sp_BBBB","merged_at":"2025-12-18 10:02:00","triggering_event_id":"evt-001"}]'){% endif %} as merged,
+            {% if target.type == 'bigquery' %}[struct(cast(null as timestamp) as created_at, timestamp '2025-12-18 10:02:00' as merged_at, 'sp_BBBB' as snowplow_id, 'evt-001' as triggering_event_id)]{% elif target.type in ['databricks', 'spark'] %}from_json('[{"snowplow_id":"sp_BBBB","merged_at":"2025-12-18 10:02:00","triggering_event_id":"evt-001"}]', 'array<struct<snowplow_id:string,created_at:timestamp,merged_at:timestamp,triggering_event_id:string>>'){% else %}parse_json('[{"snowplow_id":"sp_BBBB","merged_at":"2025-12-18 10:02:00","triggering_event_id":"evt-001"}]'){% endif %} as merged,
             cast('2025-12-18 10:02:00.000' as timestamp) as collector_tstamp,
             cast('2025-12-18 10:02:00.000' as timestamp) as derived_tstamp,
             cast('2025-12-18 11:00:00.000' as timestamp) as load_tstamp
@@ -66,7 +66,7 @@ unit_tests:
           select
             'mev-002',
             'sp_CCCC',
-            {% if target.type == 'bigquery' %}[struct(cast(null as timestamp) as created_at, timestamp '2025-12-18 12:00:00' as merged_at, 'sp_AAAA' as snowplow_id, 'evt-002' as triggering_event_id), struct(cast(null as timestamp) as created_at, timestamp '2025-12-18 12:00:00' as merged_at, 'sp_BBBB' as snowplow_id, 'evt-002' as triggering_event_id)]{% else %}parse_json('[{"snowplow_id":"sp_AAAA","merged_at":"2025-12-18 12:00:00","triggering_event_id":"evt-002"},{"snowplow_id":"sp_BBBB","merged_at":"2025-12-18 12:00:00","triggering_event_id":"evt-002"}]'){% endif %},
+            {% if target.type == 'bigquery' %}[struct(cast(null as timestamp) as created_at, timestamp '2025-12-18 12:00:00' as merged_at, 'sp_AAAA' as snowplow_id, 'evt-002' as triggering_event_id), struct(cast(null as timestamp) as created_at, timestamp '2025-12-18 12:00:00' as merged_at, 'sp_BBBB' as snowplow_id, 'evt-002' as triggering_event_id)]{% elif target.type in ['databricks', 'spark'] %}from_json('[{"snowplow_id":"sp_AAAA","merged_at":"2025-12-18 12:00:00","triggering_event_id":"evt-002"},{"snowplow_id":"sp_BBBB","merged_at":"2025-12-18 12:00:00","triggering_event_id":"evt-002"}]', 'array<struct<snowplow_id:string,created_at:timestamp,merged_at:timestamp,triggering_event_id:string>>'){% else %}parse_json('[{"snowplow_id":"sp_AAAA","merged_at":"2025-12-18 12:00:00","triggering_event_id":"evt-002"},{"snowplow_id":"sp_BBBB","merged_at":"2025-12-18 12:00:00","triggering_event_id":"evt-002"}]'){% endif %},
             cast('2025-12-18 12:00:00.000' as timestamp),
             cast('2025-12-18 12:00:00.000' as timestamp),
             cast('2025-12-18 13:00:00.000' as timestamp)
@@ -96,7 +96,7 @@ unit_tests:
           select
             'mev-002' as merge_event_id,
             'sp_CCCC' as active_snowplow_id,
-            {% if target.type == 'bigquery' %}[struct(cast(null as timestamp) as created_at, timestamp '2025-12-19 14:00:00' as merged_at, 'sp_BBBB' as snowplow_id, 'evt-002' as triggering_event_id)]{% else %}parse_json('[{"snowplow_id":"sp_BBBB","merged_at":"2025-12-19 14:00:00","triggering_event_id":"evt-002"}]'){% endif %} as merged,
+            {% if target.type == 'bigquery' %}[struct(cast(null as timestamp) as created_at, timestamp '2025-12-19 14:00:00' as merged_at, 'sp_BBBB' as snowplow_id, 'evt-002' as triggering_event_id)]{% elif target.type in ['databricks', 'spark'] %}from_json('[{"snowplow_id":"sp_BBBB","merged_at":"2025-12-19 14:00:00","triggering_event_id":"evt-002"}]', 'array<struct<snowplow_id:string,created_at:timestamp,merged_at:timestamp,triggering_event_id:string>>'){% else %}parse_json('[{"snowplow_id":"sp_BBBB","merged_at":"2025-12-19 14:00:00","triggering_event_id":"evt-002"}]'){% endif %} as merged,
             cast('2025-12-19 14:00:00.000' as timestamp) as collector_tstamp,
             cast('2025-12-19 14:00:00.000' as timestamp) as derived_tstamp,
             cast('2025-12-19 15:00:00.000' as timestamp) as load_tstamp
@@ -131,7 +131,7 @@ unit_tests:
           select
             'mev-002' as merge_event_id,
             'sp_CCCC' as active_snowplow_id,
-            {% if target.type == 'bigquery' %}[struct(cast(null as timestamp) as created_at, timestamp '2025-12-31 09:00:00' as merged_at, 'sp_BBBB' as snowplow_id, 'evt-002' as triggering_event_id)]{% else %}parse_json('[{"snowplow_id":"sp_BBBB","merged_at":"2025-12-31 09:00:00","triggering_event_id":"evt-002"}]'){% endif %} as merged,
+            {% if target.type == 'bigquery' %}[struct(cast(null as timestamp) as created_at, timestamp '2025-12-31 09:00:00' as merged_at, 'sp_BBBB' as snowplow_id, 'evt-002' as triggering_event_id)]{% elif target.type in ['databricks', 'spark'] %}from_json('[{"snowplow_id":"sp_BBBB","merged_at":"2025-12-31 09:00:00","triggering_event_id":"evt-002"}]', 'array<struct<snowplow_id:string,created_at:timestamp,merged_at:timestamp,triggering_event_id:string>>'){% else %}parse_json('[{"snowplow_id":"sp_BBBB","merged_at":"2025-12-31 09:00:00","triggering_event_id":"evt-002"}]'){% endif %} as merged,
             cast('2025-12-31 09:00:00.000' as timestamp) as collector_tstamp,
             cast('2025-12-31 09:00:00.000' as timestamp) as derived_tstamp,
             cast('2025-12-31 10:00:00.000' as timestamp) as load_tstamp

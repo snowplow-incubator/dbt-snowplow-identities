@@ -1,118 +1,61 @@
 name: Release
 
-#####
-# Your changelog must be called CHANGELOG (no ext) and use the expected format (Package_Name tag_number (date) \n ------- \n changes...)
-# Any text between the previous and new version in the changelog will be used as the text for the release, so use markdown syntax as needed
-# The package_name variable must match what is in your CHANGELOG and will be used as part of the release name
-# This workflow maybe supports pre-release versions (with rc in the version) - but no promises.
-#####
-
 on:
   push:
-    branches:
-      - main
+    branches: [main]
+  workflow_dispatch:
 
-env:
-  package_name: snowplow_identities
+permissions:
+  contents: write
+
+concurrency:
+  group: identities-release
+  cancel-in-progress: false
 
 jobs:
-  version_check:
-    runs-on: ubuntu-latest
-    outputs:
-      v_package: ${{ steps.version.outputs.dbt_package_version}}
-      v_old: ${{ steps.previoustag.outputs.tag}}
-      new_version: ${{ steps.new_version_flag.outputs.new_version}}
-
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-      with:
-          fetch-depth: 0 # needed to get tags
-
-    - name: 'Get Previous tag'
-      id: previoustag
-      uses: "WyriHaximus/github-action-get-previous-tag@v1"
-      with:
-        fallback: 0.0.1 # Optional fallback tag to use when no tag can be found
-
-    - name: Get tag and package versions
-      id: version
-      # Grab the version number of from the project.yml file as the pushed version of the package, set to variable dbt_package_version
-      run: |
-        echo "dbt_package_version=$(grep -oP "(?<=version: ')(.*)(?=')" dbt_project.yml)" >> $GITHUB_OUTPUT
-        echo "Project YAML version: $(grep -oP "(?<=version: ')(.*)(?=')" dbt_project.yml)"
-
-    - name: Echo if version already match
-      if: ${{ steps.previoustag.outputs.tag == steps.version.outputs.dbt_package_version }}
-      run: |
-        echo "Tag version (${{ steps.previoustag.outputs.tag }}) is the same as the version in project (${{ steps.version.outputs.dbt_package_version }}), no need to release."
-
-    - name: Ensure future steps continue if version doesn't match
-      id: new_version_flag
-      if: ${{ steps.previoustag.outputs.tag != steps.version.outputs.dbt_package_version }}
-      # Set a flag to check if we need to run the future steps, if this is not set they won't run.
-      run: |
-        echo "Tag version (${{ steps.previoustag.outputs.tag }}) is different from the version in project (${{ steps.version.outputs.dbt_package_version }}), will release."
-        echo "new_version=yes" >> $GITHUB_OUTPUT
-
-  tagging:
-    if: ${{ needs.version_check.outputs.new_version == 'yes' }}
-    needs: ['version_check']
-    runs-on: ubuntu-latest
-
-    steps:
-
-    - name: Checkout code
-      uses: actions/checkout@v4
-
-    - name: Setup git
-      uses: oleksiyrudenko/gha-git-credentials@v2.1.1
-      with:
-        token: '${{ secrets.GITHUB_TOKEN }}'
-        name: github-actions[bot]
-        email: 41898282+github-actions[bot]@users.noreply.github.com
-
-    - name: Generate Release Information
-      id: tag_version
-      uses: mathieudutour/github-tag-action@v6.1
-      # Use this to avoid overwriting existing tags
-      with:
-        dry_run: true
-        github_token: ${{ secrets.GITHUB_TOKEN }}
-        tag_prefix: ''
-        default_bump: false
-        custom_tag: ${{ needs.version_check.outputs.v_package }}
-
-    - name: Tag release
-      run: |
-        git tag ${{ steps.tag_version.outputs.new_tag }}
-        git push --tags
-
-
   release:
-    if: ${{ needs.version_check.outputs.new_version == 'yes' }}
-    needs: ["version_check", "tagging"]
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
-
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Read version and release notes
+        id: package
+        run: |
+          python - <<'PY'
+          import os
+          import re
+          from pathlib import Path
 
-    - name: Prep release body
-      id: release_prep
-      # Grep the CHANGELOG to get the text between the new version line and the previous version line (tail to cut off the ----- line, can't have variable length lookbacks in regex)
-      # Due to multiline output, need to use this EOF approach https://docs.github.com/en/actions/using-workflows/workflow-commands-for-github-actions#multiline-strings
-      run: |
-        echo 'release_body<<EOF' >> $GITHUB_OUTPUT
-        echo "$(grep -Pzo "(?<=${{env.package_name}} ${{ needs.version_check.outputs.v_package }} \(\d{4}-\d{2}-\d{2}\)\n)-*\n(?s)(.*)(?=${{env.package_name}} ${{ needs.version_check.outputs.v_old }} \(\d{4}-\d{2}-\d{2}\))" CHANGELOG | tail -n +2)" >> $GITHUB_OUTPUT
-        echo 'EOF' >> $GITHUB_OUTPUT
-
-    - name: Release
-      uses: ncipollo/release-action@v1
-      with:
-        tag: ${{ needs.version_check.outputs.v_package }}
-        name: ${{env.package_name}} v${{ needs.version_check.outputs.v_package }}
-        draft: false
-        body: ${{ steps.release_prep.outputs.release_body }}
-        prerelease: ${{ contains(needs.version_check.outputs.v_package, 'rc') }}
-        token: ${{ secrets.GITHUB_TOKEN }}
+          project = Path('dbt_project.yml').read_text()
+          version = re.search(r"^version: '([^']+)'$", project, re.MULTILINE).group(1)
+          if not re.fullmatch(r'\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?', version):
+              raise SystemExit('Invalid package version')
+          changelog = Path('CHANGELOG').read_text()
+          sections = re.split(r'^snowplow_identities ([^\s]+) \(\d{4}-\d{2}-\d{2}\)\n-+\n', changelog, flags=re.MULTILINE)
+          notes = next((sections[i + 1].strip() for i in range(1, len(sections), 2) if sections[i] == version), '')
+          if not notes:
+              raise SystemExit(f'Missing dated changelog entry for {version}')
+          Path('release-notes.md').write_text(notes + '\n')
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
+              output.write(f'version={version}\n')
+          PY
+      - name: Publish new version
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.package.outputs.version }}
+        run: |
+          if gh release view "$VERSION" > /dev/null 2>&1; then
+            echo "Release $VERSION already exists."
+            exit 0
+          fi
+          if git rev-parse --verify "refs/tags/$VERSION" > /dev/null 2>&1; then
+            test "$(git rev-list -n 1 "$VERSION")" = "$GITHUB_SHA"
+          fi
+          args=(--target "$GITHUB_SHA" --title "snowplow_identities v$VERSION" --notes-file release-notes.md)
+          if [[ "$VERSION" == *-* ]]; then
+            args+=(--prerelease)
+          fi
+          gh release create "$VERSION" "${args[@]}"

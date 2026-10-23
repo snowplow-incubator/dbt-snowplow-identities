@@ -23,7 +23,7 @@ You may obtain a copy of the Snowplow Personal and Academic License Version 1.0 
   {{ exceptions.raise_compiler_error(
     "The `extract_merged` macro is not implemented for adapter `"
     ~ target.type
-    ~ "`. Supported adapters are: `snowflake`, `bigquery`."
+    ~ "`. Supported adapters are: `bigquery`, `snowflake`, `databricks`, `spark`."
   ) }}
 {% endmacro %}
 
@@ -50,5 +50,18 @@ You may obtain a copy of the Snowplow Personal and Academic License Version 1.0 
         max(p.load_tstamp) as load_tstamp
     from {{ source_relation }} as p,
         unnest(p.merged) as m
+    group by 1, 2, 3
+{% endmacro %}
+
+{% macro spark__extract_merged(source_relation) %}
+    select
+        p.active_snowplow_id,
+        m.snowplow_id as snowplow_id,
+        m.merged_at as merged_at,
+        min(p.merge_event_id) as merge_event_id,
+        min(m.triggering_event_id) as triggering_event_id,
+        max(p.load_tstamp) as load_tstamp
+    from {{ source_relation }} as p
+        lateral view explode(p.merged) as m
     group by 1, 2, 3
 {% endmacro %}

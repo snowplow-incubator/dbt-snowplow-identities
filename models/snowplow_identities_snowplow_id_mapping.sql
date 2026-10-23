@@ -71,4 +71,5 @@ select
     triggering_event_id,
     load_tstamp,
     {{ snowplow_utils.current_timestamp_in_utc() }} as model_tstamp
+    {{ snowplow_identities.databricks_partition_date('load_tstamp') }}
 from deduplicated

@@ -35,7 +35,7 @@ This table is useful if you want to perform a lookup of addressable IDs (like em
 
 Optionally, id_values can be the hashed version of the identifier instead of the raw PII. This can be done by setting var('snowplow__hash_identifiers') to true.
 
-Materialized as a view over `snowplow_identities_identifier_mapping_base`, resolving each immutable row to its current `active_snowplow_id` at read time. Columns and grain are unchanged from previous versions, when this was an incremental table, so no consumer changes are needed. Because resolution happens on read, a merge is reflected the moment `snowplow_id_mapping` updates, with no rows rewritten upstream.
+Materialized as a view over `snowplow_identities_identifier_mapping_base`, resolving each immutable row to its current `active_snowplow_id` at read time. The resolved-identifier grain is retained. `id_type` is now lowercase and `mapping_state` / `is_preferred` describe ambiguous ownership; review downstream filters when upgrading. Because resolution happens on read, a merge is reflected the moment `snowplow_id_mapping` updates, with no rows rewritten upstream.
 {% enddocs %}
 
 {% docs table_identities %}

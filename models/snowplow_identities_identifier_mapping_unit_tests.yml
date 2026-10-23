@@ -155,6 +155,9 @@ unit_tests:
       owners is only safe when no identifier is configured as unique in the identity
       service and only the operator knows that.
     model: snowplow_identities_identifier_mapping
+    overrides:
+      vars:
+        snowplow__merge_limit_collapse: false
     given:
       - input: ref('snowplow_identities_identifier_mapping_base')
         rows:

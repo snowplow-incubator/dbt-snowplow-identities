@@ -14,9 +14,11 @@ Breaking changes
   removed with the manifest. `--full-refresh` now rebuilds from `snowplow__start_date`.
 
 Changed
+- Retain the 0.1.0 Databricks support across the new models, including typed payload
+  extraction, identifier hashing and partition-date columns.
 - `snowplow_identities_identifier_mapping` is now a view over the new
   `snowplow_identities_identifier_mapping_base` table, resolved to the current
-  `active_snowplow_id` at read time. Columns, grain and values are unchanged.
+  `active_snowplow_id` at read time. The resolved-identifier grain is retained; `id_type` is normalized to lowercase.
 - Each model tracks its own progress off its own `max(load_tstamp)` instead of a shared
   manifest, retiring the manifest, the base layer, the `_this_run` scratch layer and every
   run hook. 15 models become 5 plus a view, and every dependency is a real `ref()`.
@@ -39,7 +41,8 @@ Added
   `mapping_state` says how many identities an identifier resolves to, and whether they can
   be put in age order. `is_preferred` marks the row to use when you want one row per
   identifier.
-- `snowplow__merge_limit_collapse` (default false). It lets `is_preferred` pick the identity
+- `snowplow__merge_limit_collapse` now retains all owners rather than deleting rows. It
+  lets `is_preferred` pick the identity
   holding an identifier's most recent sighting when the identifier has several. Only safe
   when no identifier is configured as unique in the identity service.
 
@@ -60,6 +63,13 @@ Removed
   `snowplow_identities_internal` source that read it.
 - The `delete_stale_identifier_mapping_rows` macro and its post-hook.
 
-snowplow-identities 0.1.0 (2026-YY-ZZ)
----------------------------------------
-Initial commit of package
+snowplow_identities 0.1.0 (2026-10-14)
+------------------------------------
+Initial release of the Snowplow Identities dbt package.
+
+- Build incremental identity and identifier mappings, identity-change history and SCD Type 2 mappings from Snowplow identity and merge events.
+- Support BigQuery, Snowflake and Databricks, including Databricks field extraction, identifier hashing and partition-date columns (#35; adapted from #24).
+- Include opt-in merge-limit collapse for overlapping identifier windows (#33). Enable it only when no identifier is configured as unique in the identity service.
+- Validate full-refresh and incremental runs with merge-limit collapse disabled and enabled on all three warehouses.
+
+Requires dbt Core >=1.10.6 and <2.0.0. Databricks requires SQL / Runtime 12.2 LTS or later and typed Snowplow identity entities. This is an early-development release; standalone Spark is not included in the tested adapter support.

@@ -76,4 +76,6 @@ select
     derived_tstamp,
     collector_tstamp,
     load_tstamp
+    {{ snowplow_identities.databricks_partition_date('load_tstamp') }}
 from prep
+where snowplow_id is not null

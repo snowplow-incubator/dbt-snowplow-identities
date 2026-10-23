@@ -102,11 +102,12 @@ select
     case when old_is_earlier then prev_first_derived_tstamp else first_derived_tstamp end as first_derived_tstamp,
     case when old_is_later then prev_last_derived_tstamp else last_derived_tstamp end as last_derived_tstamp,
     greatest(load_tstamp, coalesce(prev_load_tstamp, load_tstamp)) as load_tstamp
+{{ snowplow_identities.databricks_partition_date('greatest(load_tstamp, coalesce(prev_load_tstamp, load_tstamp))', 'load_tstamp') }}
 from merged
 
 {% else %}
 
-select *
+select * {{ snowplow_identities.databricks_partition_date('load_tstamp') }}
 from this_run
 
 {% endif %}

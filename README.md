@@ -36,7 +36,10 @@ for recipes rebuilding the tables this release removes.
 
 ### Adapter support
 
-BigQuery and Snowflake.
+BigQuery, Snowflake and Databricks.
+
+Databricks requires SQL / Runtime 12.2 LTS or later and typed Snowplow identity entities.
+Standalone Spark is not included in the tested adapter support.
 
 ### Requirements
 

@@ -51,7 +51,7 @@ unpivoted as (
         snowplow_id,
         lower(col_name) as id_type,
         {% if var('snowplow__hash_identifiers', false) -%}
-        to_hex(sha256(lower(trim(id)))) as id_value,
+        {{ snowplow_identities.hash_id_value('id') }} as id_value,
         {%- else -%}
         id as id_value,
         {%- endif %}
@@ -120,10 +120,10 @@ this_run as (
     left join {{ this }} t using (snowplow_id, id_type, id_value)
 )
 
-select * from folded
+select * {{ snowplow_identities.databricks_partition_date('load_tstamp') }} from folded
 
 {% else %}
 
-select * from this_run
+select * {{ snowplow_identities.databricks_partition_date('load_tstamp') }} from this_run
 
 {% endif %}
