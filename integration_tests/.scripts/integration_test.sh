@@ -26,43 +26,35 @@ for db in ${DATABASES[@]}; do
   echo "snowplow-identities integration tests: Seeding data"
   eval "dbt seed --full-refresh --target $db" || exit 1;
 
-  # Leg 1: snowplow__merge_limit_collapse off (the default). The merge-limit
-  # scenarios keep their duplicate rows here, so the collapse-expectation
-  # tests are excluded.
+  # Package models read atomic.events as a source, so dbt cannot infer a DAG edge
+  # to this integration-only staging model. Build it before the package runs.
+  dbt run --select snowplow_identities_events_stg --target "$db" || exit 1
+
+  # Leg 1: retain every immutable mapping, without selecting a preferred owner.
   echo "snowplow-identities integration tests: Execute models - run 1/4 (full refresh)"
-  eval "dbt run --full-refresh --vars '{snowplow__allow_refresh: true, snowplow__backfill_limit_days: 1}' --target $db" || exit 1;
+  eval "dbt run --exclude snowplow_identities_events_stg --full-refresh --vars '{snowplow__backfill_limit_days: 1}' --target $db" || exit 1;
 
   for i in {2..4}
   do
     echo "snowplow-identities integration tests: Execute models - run $i/4"
-    eval "dbt run --target $db" || exit 1;
+    eval "dbt run --exclude snowplow_identities_events_stg --target $db" || exit 1;
   done
 
   echo "snowplow-identities integration tests: Test models (merge limit collapse off)"
-  if [[ $db != "snowflake" ]]; then
-    eval "dbt test --exclude tag:snowflake_only tag:merge_limit_collapse --target $db" || exit 1;
-  else
-    eval "dbt test --exclude tag:merge_limit_collapse --target $db" || exit 1;
-  fi
+  dbt test --target "$db" || exit 1
 
-  # Leg 2: snowplow__merge_limit_collapse on. The merge-limit scenarios
-  # collapse to one row per identifier here, so the default-expectation
-  # tests for identifier_mapping are excluded.
+  # Leg 2: keep the same rows and validate the opt-in preferred-owner flags.
   echo "snowplow-identities integration tests: Execute models with merge limit collapse - run 1/4 (full refresh)"
-  eval "dbt run --full-refresh --vars '{snowplow__merge_limit_collapse: true, snowplow__allow_refresh: true, snowplow__backfill_limit_days: 1}' --target $db" || exit 1;
+  eval "dbt run --exclude snowplow_identities_events_stg --full-refresh --vars '{snowplow__merge_limit_collapse: true, snowplow__backfill_limit_days: 1}' --target $db" || exit 1;
 
   for i in {2..4}
   do
     echo "snowplow-identities integration tests: Execute models with merge limit collapse - run $i/4"
-    eval "dbt run --vars '{snowplow__merge_limit_collapse: true}' --target $db" || exit 1;
+    eval "dbt run --exclude snowplow_identities_events_stg --vars '{snowplow__merge_limit_collapse: true}' --target $db" || exit 1;
   done
 
   echo "snowplow-identities integration tests: Test models (merge limit collapse on)"
-  if [[ $db != "snowflake" ]]; then
-    eval "dbt test --vars '{snowplow__merge_limit_collapse: true}' --exclude tag:snowflake_only tag:no_merge_limit_collapse --target $db" || exit 1;
-  else
-    eval "dbt test --vars '{snowplow__merge_limit_collapse: true}' --exclude tag:no_merge_limit_collapse --target $db" || exit 1;
-  fi
+  dbt test --vars '{snowplow__merge_limit_collapse: true}' --target "$db" || exit 1
 
   echo "snowplow-identities integration tests: All tests passed"
 

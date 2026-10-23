@@ -1,5 +1,5 @@
 name: 'snowplow_identities'
-version: '0.1.0'
+version: '0.2.0'
 config-version: 2
 
 require-dbt-version: [">=1.10.6", "<2.0.0"]
@@ -26,47 +26,30 @@ models:
     +file_format: "{{ 'delta' if target.type not in ['spark'] else 'iceberg'}}"
     +incremental_strategy: "{{ None if target.type not in ['spark'] else 'merge' }}"
     +bind: false
-    +tags: "snowplow_identities_incremental"
     +schema: "derived"
-    base:
-      +tags: "base"
-      manifest:
-        +schema: "snowplow_manifest"
-      scratch:
-        +schema: "scratch"
-        +tags: "scratch"
-    merge_events:
-      +schema: "derived"
-      +tags: "snowplow_identities_incremental"
-      scratch:
-        +schema: "scratch"
-        +tags: "scratch"
-    new_identities:
-      +schema: "derived"
-      +tags: "snowplow_identities_incremental"
-      scratch:
-        +schema: "scratch"
-        +tags: "scratch"
-    scratch:
+    staging:
       +schema: "scratch"
-      +tags: "scratch"
+      +tags: "staging"
 
 vars:
   snowplow_identities:
     # OPERATION & LOGIC
     snowplow__start_date: '2026-01-01' # The date from which to start processing events
-    snowplow__allow_refresh: false #  If set to true, the incremental manifest will be dropped when running with a `--full-refresh` flag
-    snowplow__dev_target_name: dev # If the target matches the dev target, there is no need to set the snowplow__allow_refresh to true to drop the manifest table as well
     snowplow__hash_identifiers: false # Set to true to hash identifiers before processing (recommended for PII compliance)
-    snowplow__merge_limit_collapse: false # Collapse duplicate identifier_mapping rows left behind when the identity service hits its merge limit and links instead of merging. Heals each identifier when it next appears in a batch, not retroactively; a full refresh from snowplow__start_date converges everything at once. Collapses an identifier only when its oldest identity was last to see it, or first saw it after the younger identity was created; anything else is left alone as a possible TTL eviction. ONLY safe when no identifier is configured as unique in the identity service.
     snowplow__identifiers: [{'reference': 'domain_userid', 'alias': 'domain_userid'}, {'reference': 'user_id', 'alias': 'user_id'}] # List of identifiers to process.
-    snowplow__backfill_limit_days: 30
+    snowplow__backfill_limit_days: 30 # Days advanced per batch; extended to the upstream watermark or first eligible day after a gap.
+    snowplow__lookback_days: 1 # Days of overlap re-scanned each run for late-arriving data. Also the run-twice idempotency window.
     # filter your data:
-    snowplow__app_id: []
+    snowplow__merge_limit_collapse: false # Marks the identity holding an identifier's most recent sighting as is_preferred when the identifier sits under several. Covers both a merge the service refused at its limit and an identifier that expired and came back under a new identity. ONLY safe when no identifier is configured as unique in the identity service.
+    snowplow__app_id: [] # Restricts which of your own applications' events are processed. Empty means all.
+    snowplow__identities_app_id: ['snowplow-identities'] # app_id the identity service emits its own events under. Empty means no filter.
 
     # WAREHOUSE & TRACKER
     snowplow__databricks_catalog: "hive_metastore"
     # snowplow__atomic_schema: 'atomic' # Only set if not using 'atomic' schema for Snowplow events data
+    snowplow__partition_tstamp: "load_tstamp" # The column atomic.events is physically partitioned by. Set to 'collector_tstamp' if that is your partition key, so staging scans still prune.
+    snowplow__partition_tstamp_type: "timestamp" # Type of snowplow__partition_tstamp: 'timestamp' or 'date'. Set to 'date' when the partition column is a DATE, so the prune predicate uses matching-typed bounds.
+    snowplow__partition_buffer_days: 2 # Extra days added to the partition-prune predicate to absorb collector-to-load lag when snowplow__partition_tstamp is not load_tstamp.
     # snowplow__database: # Only set if not using target.database for Snowplow events data -- WILL BE IGNORED FOR DATABRICKS
     # snowplow__events_table: "events" # Only set if not using 'events' table for Snowplow events data
     # PRIVATE VARS - DO NOT MODIFY
@@ -76,10 +59,9 @@ vars:
     snowplow__license_accepted: false
 
 on-run-start:
-  - "{{ snowplow_utils.snowplow_delete_from_manifest(var('models_to_remove',[])) }}"
   - "{{ snowplow_utils.license_check(var('snowplow__license_accepted')) }}"
+  - "{{ snowplow_identities.check_upgrade() }}"
 on-run-end:
-  - "{{ snowplow_utils.snowplow_incremental_post_hook_t(package_name='snowplow_identities', incremental_manifest_table_name='snowplow_identities_incremental_manifest', base_events_this_run_table_name='snowplow_identities_base_events_this_run') }}"
   - "{{ snowplow_utils.grant_usage_on_schemas_built_into(var('snowplow__grant_schemas', true)) }}"
 flags:
   require_generic_test_arguments_property: true

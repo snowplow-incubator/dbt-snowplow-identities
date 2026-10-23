@@ -1,500 +1,224 @@
 version: 2
 
+# These are the re-pointing regression scenarios that previously lived against the
+# incremental identifier_mapping table. They now target the view, because resolution
+# moved to read time -- the behaviour under test is unchanged, the layer that owns it
+# is not. Each one used to require rewriting or deleting stored rows; none of them
+# writes anything now.
+#
+# identities is mocked because mapping_state ranks an identifier's owners by their
+# created_at. Single-owner cases never read it, so their fixture is empty.
+
 unit_tests:
 
-  - name: test__snowplow_identities_identifier_mapping__repoint_existing_on_merge
+  - name: test__snowplow_identities_identifier_mapping__resolves_merged_child_to_parent
     description: >
-      Regression test. In batch 1, sp_BBBB was created and its
-      domain_userid=user-bbb was stored in the identifier_mapping table.
-      In batch 2, sp_BBBB is merged into sp_AAAA but no new events arrive
-      for sp_BBBB. The model must re-point the existing identifier row
-      from active_snowplow_id=sp_BBBB to sp_AAAA.
+      sp_BBBB's domain_userid=user-bbb was stored under sp_BBBB. sp_BBBB has since
+      merged into sp_AAAA and no new events have arrived for it. The view must report
+      active_snowplow_id=sp_AAAA without the base row ever being rewritten.
     model: snowplow_identities_identifier_mapping
-    overrides:
-      macros:
-        is_incremental: true
-        snowplow_utils.is_run_with_new_events: "true"
     given:
-      - input: ref('snowplow_identities_identifier_mapping_this_run')
-        rows: []
-      - input: ref('snowplow_identities_new_identities')
-        rows: []
-      - input: ref('snowplow_identities_snowplow_id_mapping_this_run')
+      - input: ref('snowplow_identities_identifier_mapping_base')
         rows:
-          - {snowplow_id: 'sp_BBBB', active_snowplow_id: 'sp_AAAA', merged_at: '2025-12-19 14:00:00.000', model_tstamp: '2025-12-19 14:05:00.000'}
+          - {id_key: 'k_bbb', snowplow_id: 'sp_BBBB', id_type: 'domain_userid', id_value: 'user-bbb', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2025-12-17 10:00:00.000', last_seen_at: '2025-12-17 10:00:10.000', first_seen_event_id: 'evt-001', load_tstamp: '2025-12-18 11:00:00.000'}
       - input: ref('snowplow_identities_snowplow_id_mapping')
         rows:
-          - {snowplow_id: 'sp_BBBB', active_snowplow_id: 'sp_AAAA', merged_at: '2025-12-19 14:00:00.000', model_tstamp: '2025-12-19 14:05:00.000'}
-      - input: this
-        rows:
-          - {uuid: 'uuid-bbb', active_snowplow_id: 'sp_BBBB', id_type: 'DOMAIN_USERID', id_value: 'user-bbb', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2025-12-18 10:00:00.000', last_seen_at: '2025-12-18 10:00:10.000', first_seen_event_id: 'evt-002'}
+          - {snowplow_id: 'sp_BBBB', active_snowplow_id: 'sp_AAAA', merged_at: '2025-12-18 10:02:00.000', model_tstamp: '2025-12-18 10:05:00.000'}
+      - input: ref('snowplow_identities_identities')
+        rows: []
+    # uuid is omitted: surrogate key (non-deterministic hash)
     expect:
       rows:
-        - {active_snowplow_id: 'sp_AAAA', id_type: 'DOMAIN_USERID', id_value: 'user-bbb', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2025-12-18 10:00:00.000', last_seen_at: '2025-12-18 10:00:10.000', first_seen_event_id: 'evt-002'}
+        - {active_snowplow_id: 'sp_AAAA', id_type: 'domain_userid', id_value: 'user-bbb', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2025-12-17 10:00:00.000', last_seen_at: '2025-12-17 10:00:10.000', first_seen_event_id: 'evt-001', mapping_state: 'single', is_preferred: true}
 
-  - name: test__snowplow_identities_identifier_mapping__repoint_multiple_parents_to_same_active
+  - name: test__snowplow_identities_identifier_mapping__collapses_multiple_parents_to_one_row
     description: >
-      Regression test for the duplicate-uuid MERGE failure. During an
-      identities-service incident one identifier (user-shared) was seen under
-      several snowplow_ids (sp_CCCC and sp_DDDD), each stored as its own row in
-      the identifier_mapping table. In a later batch both are merged into
-      sp_AAAA with no new events for the identifier. Re-pointing resolves both
-      historical rows to active_snowplow_id=sp_AAAA, giving them the same uuid.
-      Without dedupe existing_to_repoint emits both, and the MERGE on
-      unique_key=uuid rejects two source rows for one target. The model must
-      collapse them into a single row spanning both rows' seen-at range.
+      Regression test for the duplicate-uuid MERGE failure. During an identities-service
+      incident one identifier (user-shared) was seen under several snowplow_ids
+      (sp_CCCC and sp_DDDD), each its own immutable base row. Both have since merged
+      into sp_AAAA. The view must collapse them into a single row spanning both
+      seen-at ranges, taking first_app_id and first_seen_event_id from the earlier row.
+      Previously this needed a dedupe before the MERGE; here it is just aggregation.
     model: snowplow_identities_identifier_mapping
-    overrides:
-      macros:
-        is_incremental: true
-        snowplow_utils.is_run_with_new_events: "true"
     given:
-      - input: ref('snowplow_identities_identifier_mapping_this_run')
-        rows: []
-      - input: ref('snowplow_identities_new_identities')
-        rows: []
-      - input: ref('snowplow_identities_snowplow_id_mapping_this_run')
+      - input: ref('snowplow_identities_identifier_mapping_base')
         rows:
-          - {snowplow_id: 'sp_CCCC', active_snowplow_id: 'sp_AAAA', merged_at: '2025-12-19 14:00:00.000', model_tstamp: '2025-12-19 14:05:00.000'}
-          - {snowplow_id: 'sp_DDDD', active_snowplow_id: 'sp_AAAA', merged_at: '2025-12-19 14:00:00.000', model_tstamp: '2025-12-19 14:05:00.000'}
+          - {id_key: 'k_ccc', snowplow_id: 'sp_CCCC', id_type: 'domain_userid', id_value: 'user-shared', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2025-12-17 09:00:00.000', last_seen_at: '2025-12-17 09:00:10.000', first_seen_event_id: 'evt-ccc', load_tstamp: '2025-12-18 11:00:00.000'}
+          - {id_key: 'k_ddd', snowplow_id: 'sp_DDDD', id_type: 'domain_userid', id_value: 'user-shared', first_app_id: 'mobile', last_app_id: 'mobile', first_seen_at: '2025-12-17 11:00:00.000', last_seen_at: '2025-12-17 11:00:10.000', first_seen_event_id: 'evt-ddd', load_tstamp: '2025-12-18 11:00:00.000'}
       - input: ref('snowplow_identities_snowplow_id_mapping')
         rows:
-          - {snowplow_id: 'sp_CCCC', active_snowplow_id: 'sp_AAAA', merged_at: '2025-12-19 14:00:00.000', model_tstamp: '2025-12-19 14:05:00.000'}
-          - {snowplow_id: 'sp_DDDD', active_snowplow_id: 'sp_AAAA', merged_at: '2025-12-19 14:00:00.000', model_tstamp: '2025-12-19 14:05:00.000'}
-      - input: this
-        rows:
-          - {uuid: 'uuid-ccc', active_snowplow_id: 'sp_CCCC', id_type: 'DOMAIN_USERID', id_value: 'user-shared', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2025-12-18 10:00:00.000', last_seen_at: '2025-12-18 10:00:10.000', first_seen_event_id: 'evt-ccc'}
-          - {uuid: 'uuid-ddd', active_snowplow_id: 'sp_DDDD', id_type: 'DOMAIN_USERID', id_value: 'user-shared', first_app_id: 'mobile', last_app_id: 'mobile', first_seen_at: '2025-12-18 11:00:00.000', last_seen_at: '2025-12-18 11:00:20.000', first_seen_event_id: 'evt-ddd'}
+          - {snowplow_id: 'sp_CCCC', active_snowplow_id: 'sp_AAAA', merged_at: '2025-12-18 10:02:00.000', model_tstamp: '2025-12-18 10:05:00.000'}
+          - {snowplow_id: 'sp_DDDD', active_snowplow_id: 'sp_AAAA', merged_at: '2025-12-18 10:02:00.000', model_tstamp: '2025-12-18 10:05:00.000'}
+      - input: ref('snowplow_identities_identities')
+        rows: []
     expect:
       rows:
-        - {active_snowplow_id: 'sp_AAAA', id_type: 'DOMAIN_USERID', id_value: 'user-shared', first_app_id: 'web', last_app_id: 'mobile', first_seen_at: '2025-12-18 10:00:00.000', last_seen_at: '2025-12-18 11:00:20.000', first_seen_event_id: 'evt-ccc'}
+        - {active_snowplow_id: 'sp_AAAA', id_type: 'domain_userid', id_value: 'user-shared', first_app_id: 'web', last_app_id: 'mobile', first_seen_at: '2025-12-17 09:00:00.000', last_seen_at: '2025-12-17 11:00:10.000', first_seen_event_id: 'evt-ccc', mapping_state: 'single', is_preferred: true}
 
-  - name: test__snowplow_identities_identifier_mapping__merge_with_new_events_for_absorbed_identity
+  - name: test__snowplow_identities_identifier_mapping__unmerged_id_resolves_to_itself
     description: >
-      In batch 1, sp_BBBB was created with domain_userid=user-bbb.
-      In batch 2, sp_BBBB merges into sp_AAAA and new events also
-      arrive for sp_BBBB in the same batch (e.g. a page view tracked
-      just before the merge). The identifier row should be updated
-      from the new events (not duplicated by the re-pointing path),
-      and correctly point to sp_AAAA.
+      An identity that has never been merged has no row in snowplow_id_mapping, so the
+      view must fall back to its own snowplow_id rather than dropping the row.
     model: snowplow_identities_identifier_mapping
-    overrides:
-      macros:
-        is_incremental: true
-        snowplow_utils.is_run_with_new_events: "true"
     given:
-      - input: ref('snowplow_identities_identifier_mapping_this_run')
+      - input: ref('snowplow_identities_identifier_mapping_base')
         rows:
-          - {uuid: 'uuid-bbb', active_snowplow_id: 'sp_AAAA', id_type: 'DOMAIN_USERID', id_value: 'user-bbb', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2025-12-18 10:00:00.000', last_seen_at: '2025-12-19 14:00:00.000', first_seen_event_id: 'evt-new'}
-      - input: ref('snowplow_identities_new_identities')
-        rows: []
-      - input: ref('snowplow_identities_snowplow_id_mapping_this_run')
-        rows:
-          - {snowplow_id: 'sp_BBBB', active_snowplow_id: 'sp_AAAA', merged_at: '2025-12-19 14:00:00.000', model_tstamp: '2025-12-19 14:05:00.000'}
-      - input: ref('snowplow_identities_snowplow_id_mapping')
-        rows:
-          - {snowplow_id: 'sp_BBBB', active_snowplow_id: 'sp_AAAA', merged_at: '2025-12-19 14:00:00.000', model_tstamp: '2025-12-19 14:05:00.000'}
-      - input: this
-        rows:
-          - {uuid: 'uuid-bbb', active_snowplow_id: 'sp_BBBB', id_type: 'DOMAIN_USERID', id_value: 'user-bbb', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2025-12-18 10:00:00.000', last_seen_at: '2025-12-18 10:00:10.000', first_seen_event_id: 'evt-002'}
-    expect:
-      rows:
-        - {active_snowplow_id: 'sp_AAAA', id_type: 'DOMAIN_USERID', id_value: 'user-bbb', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2025-12-18 10:00:00.000', last_seen_at: '2025-12-19 14:00:00.000', first_seen_event_id: 'evt-002'}
-
-  - name: test__snowplow_identities_identifier_mapping__preserve_first_seen_at
-    description: >
-      A user visits on Monday (first_seen_at=Monday, last_seen_at=Monday).
-      The same identifier appears again on Wednesday in a new batch.
-      The table should preserve first_seen_at=Monday and update
-      last_seen_at=Wednesday.
-    model: snowplow_identities_identifier_mapping
-    overrides:
-      macros:
-        is_incremental: true
-        snowplow_utils.is_run_with_new_events: "true"
-    given:
-      - input: ref('snowplow_identities_identifier_mapping_this_run')
-        rows:
-          - {uuid: 'uuid-aaa', active_snowplow_id: 'sp_AAAA', id_type: 'DOMAIN_USERID', id_value: 'user-aaa', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2025-12-17 10:00:00.000', last_seen_at: '2025-12-19 14:00:00.000', first_seen_event_id: 'evt-wed'}
-      - input: ref('snowplow_identities_new_identities')
-        rows: []
-      - input: ref('snowplow_identities_snowplow_id_mapping_this_run')
-        rows: []
+          - {id_key: 'k_aaa', snowplow_id: 'sp_AAAA', id_type: 'user_id', id_value: 'john@example.com', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2025-12-18 10:00:00.000', last_seen_at: '2025-12-18 10:00:10.000', first_seen_event_id: 'evt-001', load_tstamp: '2025-12-18 11:00:00.000'}
       - input: ref('snowplow_identities_snowplow_id_mapping')
         rows: []
-      - input: this
-        rows:
-          - {uuid: 'uuid-aaa', active_snowplow_id: 'sp_AAAA', id_type: 'DOMAIN_USERID', id_value: 'user-aaa', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2025-12-15 10:00:00.000', last_seen_at: '2025-12-15 10:00:00.000', first_seen_event_id: 'evt-mon'}
+      - input: ref('snowplow_identities_identities')
+        rows: []
     expect:
       rows:
-        - {active_snowplow_id: 'sp_AAAA', id_type: 'DOMAIN_USERID', id_value: 'user-aaa', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2025-12-15 10:00:00.000', last_seen_at: '2025-12-19 14:00:00.000', first_seen_event_id: 'evt-mon'}
+        - {active_snowplow_id: 'sp_AAAA', id_type: 'user_id', id_value: 'john@example.com', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2025-12-18 10:00:00.000', last_seen_at: '2025-12-18 10:00:10.000', first_seen_event_id: 'evt-001', mapping_state: 'single', is_preferred: true}
 
-  - name: test__snowplow_identities_identifier_mapping__preserve_first_app_id
+  - name: test__snowplow_identities_identifier_mapping__cascading_merge_resolves_to_final_root
     description: >
-      Bug: first_app_id is overwritten by the current batch instead of
-      being preserved from the historical record. In batch 1, identifier
-      user-aaa is first seen from app 'web'. In batch 2, the same
-      identifier appears from app 'mobile'. The model should preserve
-      first_app_id='web' from batch 1, but new_with_history uses
-      c.first_app_id directly (='mobile') without checking which batch
-      is earlier.
+      A cascading merge: sp_CCCC merged into sp_BBBB, then that group merged into
+      sp_AAAA. snowplow_id_mapping re-points both children at the final root, so the
+      view's single-hop join lands on sp_AAAA for both. This is the scenario that
+      previously left stale rows behind and needed the _affected snapshot to fix.
     model: snowplow_identities_identifier_mapping
-    config:
-      tags: ["snowflake_only"]
-    overrides:
-      macros:
-        is_incremental: true
-        snowplow_utils.is_run_with_new_events: "true"
     given:
-      - input: ref('snowplow_identities_identifier_mapping_this_run')
+      - input: ref('snowplow_identities_identifier_mapping_base')
         rows:
-          - {uuid: 'uuid-aaa', active_snowplow_id: 'sp_AAAA', id_type: 'DOMAIN_USERID', id_value: 'user-aaa', first_app_id: 'mobile', last_app_id: 'mobile', first_seen_at: '2025-12-19 14:00:00.000', last_seen_at: '2025-12-19 14:00:00.000', first_seen_event_id: 'evt-wed'}
-      - input: ref('snowplow_identities_new_identities')
-        rows: []
-      - input: ref('snowplow_identities_snowplow_id_mapping_this_run')
-        rows: []
+          - {id_key: 'k_bbb', snowplow_id: 'sp_BBBB', id_type: 'domain_userid', id_value: 'user-bbb', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2025-12-17 10:00:00.000', last_seen_at: '2025-12-17 10:00:10.000', first_seen_event_id: 'evt-bbb', load_tstamp: '2025-12-18 11:00:00.000'}
+          - {id_key: 'k_ccc', snowplow_id: 'sp_CCCC', id_type: 'domain_userid', id_value: 'user-ccc', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2025-12-17 11:00:00.000', last_seen_at: '2025-12-17 11:00:10.000', first_seen_event_id: 'evt-ccc', load_tstamp: '2025-12-18 11:00:00.000'}
       - input: ref('snowplow_identities_snowplow_id_mapping')
-        rows: []
-      - input: this
         rows:
-          - {uuid: 'uuid-aaa', active_snowplow_id: 'sp_AAAA', id_type: 'DOMAIN_USERID', id_value: 'user-aaa', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2025-12-15 10:00:00.000', last_seen_at: '2025-12-15 10:00:00.000', first_seen_event_id: 'evt-mon'}
+          - {snowplow_id: 'sp_BBBB', active_snowplow_id: 'sp_AAAA', merged_at: '2025-12-18 10:02:00.000', model_tstamp: '2025-12-18 10:05:00.000'}
+          - {snowplow_id: 'sp_CCCC', active_snowplow_id: 'sp_AAAA', merged_at: '2025-12-18 10:02:00.000', model_tstamp: '2025-12-18 10:05:00.000'}
+      - input: ref('snowplow_identities_identities')
+        rows: []
     expect:
       rows:
-        - {active_snowplow_id: 'sp_AAAA', id_type: 'DOMAIN_USERID', id_value: 'user-aaa', first_app_id: 'web', last_app_id: 'mobile', first_seen_at: '2025-12-15 10:00:00.000', last_seen_at: '2025-12-19 14:00:00.000', first_seen_event_id: 'evt-mon'}
+        - {active_snowplow_id: 'sp_AAAA', id_type: 'domain_userid', id_value: 'user-bbb', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2025-12-17 10:00:00.000', last_seen_at: '2025-12-17 10:00:10.000', first_seen_event_id: 'evt-bbb', mapping_state: 'single', is_preferred: true}
+        - {active_snowplow_id: 'sp_AAAA', id_type: 'domain_userid', id_value: 'user-ccc', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2025-12-17 11:00:00.000', last_seen_at: '2025-12-17 11:00:10.000', first_seen_event_id: 'evt-ccc', mapping_state: 'single', is_preferred: true}
 
-  - name: test__snowplow_identities_identifier_mapping__late_arriving_earlier_event
+  - name: test__snowplow_identities_identifier_mapping__identifier_reused_by_new_identity
     description: >
-      Bug: first_seen_event_id is not updated when a late-arriving event
-      has an earlier timestamp. In batch 1, identifier user-aaa is first
-      seen at 10:00 (evt-001). In batch 2, a late-arriving event (evt-early)
-      with derived_tstamp 09:50 arrives. The first_seen_event_id should
-      update to evt-early (chronologically earlier), but
-      coalesce(h.first_seen_event_id, c.first_seen_event_id) always
-      keeps the historical value when it exists.
-    model: snowplow_identities_identifier_mapping
-    config:
-      tags: ["snowflake_only"]
-    overrides:
-      macros:
-        is_incremental: true
-        snowplow_utils.is_run_with_new_events: "true"
-    given:
-      - input: ref('snowplow_identities_identifier_mapping_this_run')
-        rows:
-          - {uuid: 'uuid-aaa', active_snowplow_id: 'sp_AAAA', id_type: 'DOMAIN_USERID', id_value: 'user-aaa', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2025-12-18 09:50:00.000', last_seen_at: '2025-12-18 09:50:00.000', first_seen_event_id: 'evt-early'}
-      - input: ref('snowplow_identities_new_identities')
-        rows: []
-      - input: ref('snowplow_identities_snowplow_id_mapping_this_run')
-        rows: []
-      - input: ref('snowplow_identities_snowplow_id_mapping')
-        rows: []
-      - input: this
-        rows:
-          - {uuid: 'uuid-aaa', active_snowplow_id: 'sp_AAAA', id_type: 'DOMAIN_USERID', id_value: 'user-aaa', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2025-12-18 10:00:00.000', last_seen_at: '2025-12-18 10:00:00.000', first_seen_event_id: 'evt-001'}
-    expect:
-      rows:
-        - {active_snowplow_id: 'sp_AAAA', id_type: 'DOMAIN_USERID', id_value: 'user-aaa', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2025-12-18 09:50:00.000', last_seen_at: '2025-12-18 10:00:00.000', first_seen_event_id: 'evt-early'}
-
-  - name: test__snowplow_identities_identifier_mapping__collapse_needs_oldest_and_latest
-    description: >
-      Merge limit collapse. sp_AAAA and sp_BBBB each have rows for shared-x and
-      shared-z, and this batch brings an event for shared-x under sp_AAAA and
-      one for shared-z under sp_BBBB. sp_AAAA was created first, so it is the
-      oldest for both identifiers, but collapsing also requires the oldest
-      identity to be the one the identifier was last seen under. shared-x was
-      last seen under sp_AAAA, so it collapses there. shared-z was last seen
-      under sp_BBBB, so it is left alone: an identifier whose latest activity
-      sits under a younger identity may have been evicted from the older one,
-      and moving it back would attach live history to a dead identity.
+      TTL behaviour the old grain could not represent. user-recycled expired from the
+      engine under sp_OLD and later reappeared under sp_NEW, which has not merged with
+      sp_OLD. Both base rows survive and the view reports two distinct owners rather
+      than silently overwriting the first. sp_NEW holds the later sighting, so it is the
+      preferred row.
     model: snowplow_identities_identifier_mapping
     overrides:
       vars:
         snowplow__merge_limit_collapse: true
-      macros:
-        is_incremental: true
-        snowplow_utils.is_run_with_new_events: "true"
     given:
-      - input: ref('snowplow_identities_identifier_mapping_this_run')
+      - input: ref('snowplow_identities_identifier_mapping_base')
         rows:
-          - {uuid: 'uuid-ax', active_snowplow_id: 'sp_AAAA', id_type: 'DOMAIN_USERID', id_value: 'shared-x', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2026-01-13 10:00:00.000', last_seen_at: '2026-01-13 10:00:00.000', first_seen_event_id: 'evt-ax2'}
-          - {uuid: 'uuid-bz', active_snowplow_id: 'sp_BBBB', id_type: 'DOMAIN_USERID', id_value: 'shared-z', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2026-01-13 11:00:00.000', last_seen_at: '2026-01-13 11:00:00.000', first_seen_event_id: 'evt-bz2'}
-      - input: ref('snowplow_identities_snowplow_id_mapping_this_run')
-        rows: []
+          - {id_key: 'k_old', snowplow_id: 'sp_OLD', id_type: 'domain_userid', id_value: 'user-recycled', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2025-01-01 10:00:00.000', last_seen_at: '2025-01-01 10:00:10.000', first_seen_event_id: 'evt-old', load_tstamp: '2025-12-18 11:00:00.000'}
+          - {id_key: 'k_new', snowplow_id: 'sp_NEW', id_type: 'domain_userid', id_value: 'user-recycled', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2025-12-01 10:00:00.000', last_seen_at: '2025-12-01 10:00:10.000', first_seen_event_id: 'evt-new', load_tstamp: '2025-12-18 11:00:00.000'}
       - input: ref('snowplow_identities_snowplow_id_mapping')
         rows: []
-      - input: ref('snowplow_identities_new_identities')
+      - input: ref('snowplow_identities_identities')
         rows:
-          - {snowplow_id: 'sp_AAAA', created_at: '2026-01-01 00:00:00.000'}
-          - {snowplow_id: 'sp_BBBB', created_at: '2026-01-02 00:00:00.000'}
-      - input: this
-        rows:
-          - {uuid: 'uuid-ax', active_snowplow_id: 'sp_AAAA', id_type: 'DOMAIN_USERID', id_value: 'shared-x', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2026-01-01 00:00:00.000', last_seen_at: '2026-01-10 00:00:00.000', first_seen_event_id: 'evt-ax'}
-          - {uuid: 'uuid-az', active_snowplow_id: 'sp_AAAA', id_type: 'DOMAIN_USERID', id_value: 'shared-z', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2026-01-01 00:00:00.000', last_seen_at: '2026-01-05 00:00:00.000', first_seen_event_id: 'evt-az'}
-          - {uuid: 'uuid-bx', active_snowplow_id: 'sp_BBBB', id_type: 'DOMAIN_USERID', id_value: 'shared-x', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2026-01-02 00:00:00.000', last_seen_at: '2026-01-08 00:00:00.000', first_seen_event_id: 'evt-bx'}
-          - {uuid: 'uuid-bz', active_snowplow_id: 'sp_BBBB', id_type: 'DOMAIN_USERID', id_value: 'shared-z', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2026-01-02 00:00:00.000', last_seen_at: '2026-01-12 00:00:00.000', first_seen_event_id: 'evt-bz'}
+          - {snowplow_id: 'sp_OLD', created_at: '2025-01-01 09:00:00.000'}
+          - {snowplow_id: 'sp_NEW', created_at: '2025-12-01 09:00:00.000'}
     expect:
       rows:
-        - {active_snowplow_id: 'sp_AAAA', id_type: 'DOMAIN_USERID', id_value: 'shared-x', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2026-01-01 00:00:00.000', last_seen_at: '2026-01-13 10:00:00.000', first_seen_event_id: 'evt-ax'}
-        - {active_snowplow_id: 'sp_BBBB', id_type: 'DOMAIN_USERID', id_value: 'shared-z', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2026-01-02 00:00:00.000', last_seen_at: '2026-01-13 11:00:00.000', first_seen_event_id: 'evt-bz'}
+        - {active_snowplow_id: 'sp_OLD', id_type: 'domain_userid', id_value: 'user-recycled', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2025-01-01 10:00:00.000', last_seen_at: '2025-01-01 10:00:10.000', first_seen_event_id: 'evt-old', mapping_state: 'multiple', is_preferred: false}
+        - {active_snowplow_id: 'sp_NEW', id_type: 'domain_userid', id_value: 'user-recycled', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2025-12-01 10:00:00.000', last_seen_at: '2025-12-01 10:00:10.000', first_seen_event_id: 'evt-new', mapping_state: 'multiple', is_preferred: true}
 
-  - name: test__snowplow_identities_identifier_mapping__unknown_age_root_never_absorbed
+  - name: test__snowplow_identities_identifier_mapping__merge_limit_link_prefers_oldest_owner
     description: >
-      Merge limit collapse. sp_NOAGE has a row for shared-x but no row in
-      new_identities. That happens when an identity was created before the
-      model's start date, or was only ever named by merge events, which carry
-      no identity context. Its created_at is unknown. Nothing proves it is
-      younger than sp_KNOWN. The identity service may still resolve shared-x
-      to it. So the rule is: if any snowplow_id with a row for an identifier
-      has no created_at, no row for that identifier moves and no row is
-      deleted. Sorting unknowns last would move sp_NOAGE's row under the
-      younger sp_KNOWN and delete the wrong row.
+      The merge limit shape. The engine refused to merge sp_YOUNG into sp_OLDEST and
+      linked instead, so no merge event exists and user-linked sits under both. sp_OLDEST
+      is the older identity and still holds the later sighting, so with the var on it is
+      the preferred row and sp_YOUNG is not.
     model: snowplow_identities_identifier_mapping
     overrides:
       vars:
         snowplow__merge_limit_collapse: true
-      macros:
-        is_incremental: true
-        snowplow_utils.is_run_with_new_events: "true"
     given:
-      - input: ref('snowplow_identities_identifier_mapping_this_run')
+      - input: ref('snowplow_identities_identifier_mapping_base')
         rows:
-          - {uuid: 'uuid-kx', active_snowplow_id: 'sp_KNOWN', id_type: 'DOMAIN_USERID', id_value: 'shared-x', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2026-01-13 10:00:00.000', last_seen_at: '2026-01-13 10:00:00.000', first_seen_event_id: 'evt-kx2'}
-      - input: ref('snowplow_identities_snowplow_id_mapping_this_run')
-        rows: []
+          - {id_key: 'k_oldest', snowplow_id: 'sp_OLDEST', id_type: 'domain_userid', id_value: 'user-linked', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2025-12-17 10:00:00.000', last_seen_at: '2025-12-19 10:00:00.000', first_seen_event_id: 'evt-oldest', load_tstamp: '2025-12-19 11:00:00.000'}
+          - {id_key: 'k_young', snowplow_id: 'sp_YOUNG', id_type: 'domain_userid', id_value: 'user-linked', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2025-12-18 10:00:00.000', last_seen_at: '2025-12-18 10:00:00.000', first_seen_event_id: 'evt-young', load_tstamp: '2025-12-19 11:00:00.000'}
       - input: ref('snowplow_identities_snowplow_id_mapping')
         rows: []
-      - input: ref('snowplow_identities_new_identities')
+      - input: ref('snowplow_identities_identities')
         rows:
-          - {snowplow_id: 'sp_KNOWN', created_at: '2026-01-05 00:00:00.000'}
-      - input: this
-        rows:
-          - {uuid: 'uuid-nx', active_snowplow_id: 'sp_NOAGE', id_type: 'DOMAIN_USERID', id_value: 'shared-x', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2026-01-01 00:00:00.000', last_seen_at: '2026-01-02 00:00:00.000', first_seen_event_id: 'evt-nx'}
-          - {uuid: 'uuid-kx', active_snowplow_id: 'sp_KNOWN', id_type: 'DOMAIN_USERID', id_value: 'shared-x', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2026-01-06 00:00:00.000', last_seen_at: '2026-01-10 00:00:00.000', first_seen_event_id: 'evt-kx'}
-          - {uuid: 'uuid-ky', active_snowplow_id: 'sp_KNOWN', id_type: 'DOMAIN_USERID', id_value: 'other-y', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2026-01-06 00:00:00.000', last_seen_at: '2026-01-10 00:00:00.000', first_seen_event_id: 'evt-ky'}
+          - {snowplow_id: 'sp_OLDEST', created_at: '2025-12-17 09:00:00.000'}
+          - {snowplow_id: 'sp_YOUNG', created_at: '2025-12-18 09:00:00.000'}
     expect:
       rows:
-        # sp_NOAGE's untouched history row stays in the table but is no longer
-        # re-emitted by the model: unchanged partitions are excluded from the
-        # MERGE source.
-        - {active_snowplow_id: 'sp_KNOWN', id_type: 'DOMAIN_USERID', id_value: 'shared-x', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2026-01-06 00:00:00.000', last_seen_at: '2026-01-13 10:00:00.000', first_seen_event_id: 'evt-kx'}
+        - {active_snowplow_id: 'sp_OLDEST', id_type: 'domain_userid', id_value: 'user-linked', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2025-12-17 10:00:00.000', last_seen_at: '2025-12-19 10:00:00.000', first_seen_event_id: 'evt-oldest', mapping_state: 'multiple', is_preferred: true}
+        - {active_snowplow_id: 'sp_YOUNG', id_type: 'domain_userid', id_value: 'user-linked', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2025-12-18 10:00:00.000', last_seen_at: '2025-12-18 10:00:00.000', first_seen_event_id: 'evt-young', mapping_state: 'multiple', is_preferred: false}
 
-  - name: test__snowplow_identities_identifier_mapping__unknown_age_holder_blocks_absorption
+  - name: test__snowplow_identities_identifier_mapping__merge_limit_link_prefers_nothing_by_default
     description: >
-      Merge limit collapse. Three snowplow_ids have rows for shared-x.
-      sp_UNKNOWN has no row in new_identities. sp_KNOWN was created 01-05.
-      sp_SUB was created 01-06. sp_UNKNOWN may be the oldest of the three, and
-      the one the identity service links into. Moving sp_SUB's row under
-      sp_KNOWN would then be wrong, because the service may resolve shared-x
-      to sp_UNKNOWN, not sp_KNOWN. So one undated snowplow_id freezes the whole
-      identifier: no row for shared-x moves and no row is deleted. The model
-      also emits nothing for rows it did not change.
+      The same merge limit shape with the var left at its default. mapping_state still
+      reports multiple, but neither row is preferred, because ranking an identifier's
+      owners is only safe when no identifier is configured as unique in the identity
+      service and only the operator knows that.
+    model: snowplow_identities_identifier_mapping
+    overrides:
+      vars:
+        snowplow__merge_limit_collapse: false
+    given:
+      - input: ref('snowplow_identities_identifier_mapping_base')
+        rows:
+          - {id_key: 'k_oldest', snowplow_id: 'sp_OLDEST', id_type: 'domain_userid', id_value: 'user-linked', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2025-12-17 10:00:00.000', last_seen_at: '2025-12-19 10:00:00.000', first_seen_event_id: 'evt-oldest', load_tstamp: '2025-12-19 11:00:00.000'}
+          - {id_key: 'k_young', snowplow_id: 'sp_YOUNG', id_type: 'domain_userid', id_value: 'user-linked', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2025-12-18 10:00:00.000', last_seen_at: '2025-12-18 10:00:00.000', first_seen_event_id: 'evt-young', load_tstamp: '2025-12-19 11:00:00.000'}
+      - input: ref('snowplow_identities_snowplow_id_mapping')
+        rows: []
+      - input: ref('snowplow_identities_identities')
+        rows:
+          - {snowplow_id: 'sp_OLDEST', created_at: '2025-12-17 09:00:00.000'}
+          - {snowplow_id: 'sp_YOUNG', created_at: '2025-12-18 09:00:00.000'}
+    expect:
+      rows:
+        - {active_snowplow_id: 'sp_OLDEST', id_type: 'domain_userid', id_value: 'user-linked', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2025-12-17 10:00:00.000', last_seen_at: '2025-12-19 10:00:00.000', first_seen_event_id: 'evt-oldest', mapping_state: 'multiple', is_preferred: false}
+        - {active_snowplow_id: 'sp_YOUNG', id_type: 'domain_userid', id_value: 'user-linked', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2025-12-18 10:00:00.000', last_seen_at: '2025-12-18 10:00:00.000', first_seen_event_id: 'evt-young', mapping_state: 'multiple', is_preferred: false}
+
+  - name: test__snowplow_identities_identifier_mapping__undated_owner_is_unranked
+    description: >
+      One of the two owners has no row in identities, so its created_at is unknown and
+      the owners cannot be ordered. mapping_state reports unranked and neither row is
+      preferred even with the var on.
     model: snowplow_identities_identifier_mapping
     overrides:
       vars:
         snowplow__merge_limit_collapse: true
-      macros:
-        is_incremental: true
-        snowplow_utils.is_run_with_new_events: "true"
     given:
-      - input: ref('snowplow_identities_identifier_mapping_this_run')
+      - input: ref('snowplow_identities_identifier_mapping_base')
         rows:
-          - {uuid: 'uuid-kx', active_snowplow_id: 'sp_KNOWN', id_type: 'DOMAIN_USERID', id_value: 'shared-x', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2026-01-13 10:00:00.000', last_seen_at: '2026-01-13 10:00:00.000', first_seen_event_id: 'evt-kx2'}
-      - input: ref('snowplow_identities_snowplow_id_mapping_this_run')
-        rows: []
+          - {id_key: 'k_dated', snowplow_id: 'sp_DATED', id_type: 'domain_userid', id_value: 'user-partial', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2025-12-17 10:00:00.000', last_seen_at: '2025-12-19 10:00:00.000', first_seen_event_id: 'evt-dated', load_tstamp: '2025-12-19 11:00:00.000'}
+          - {id_key: 'k_undated', snowplow_id: 'sp_UNDATED', id_type: 'domain_userid', id_value: 'user-partial', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2025-12-18 10:00:00.000', last_seen_at: '2025-12-18 10:00:00.000', first_seen_event_id: 'evt-undated', load_tstamp: '2025-12-19 11:00:00.000'}
       - input: ref('snowplow_identities_snowplow_id_mapping')
         rows: []
-      - input: ref('snowplow_identities_new_identities')
+      - input: ref('snowplow_identities_identities')
         rows:
-          - {snowplow_id: 'sp_KNOWN', created_at: '2026-01-05 00:00:00.000'}
-          - {snowplow_id: 'sp_SUB', created_at: '2026-01-06 00:00:00.000'}
-      - input: this
-        rows:
-          - {uuid: 'uuid-ux', active_snowplow_id: 'sp_UNKNOWN', id_type: 'DOMAIN_USERID', id_value: 'shared-x', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2026-01-01 00:00:00.000', last_seen_at: '2026-01-02 00:00:00.000', first_seen_event_id: 'evt-ux'}
-          - {uuid: 'uuid-kx', active_snowplow_id: 'sp_KNOWN', id_type: 'DOMAIN_USERID', id_value: 'shared-x', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2026-01-06 00:00:00.000', last_seen_at: '2026-01-10 00:00:00.000', first_seen_event_id: 'evt-kx'}
-          - {uuid: 'uuid-sx', active_snowplow_id: 'sp_SUB', id_type: 'DOMAIN_USERID', id_value: 'shared-x', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2026-01-03 00:00:00.000', last_seen_at: '2026-01-08 00:00:00.000', first_seen_event_id: 'evt-sx'}
+          - {snowplow_id: 'sp_DATED', created_at: '2025-12-17 09:00:00.000'}
     expect:
       rows:
-        - {active_snowplow_id: 'sp_KNOWN', id_type: 'DOMAIN_USERID', id_value: 'shared-x', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2026-01-06 00:00:00.000', last_seen_at: '2026-01-13 10:00:00.000', first_seen_event_id: 'evt-kx'}
+        - {active_snowplow_id: 'sp_DATED', id_type: 'domain_userid', id_value: 'user-partial', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2025-12-17 10:00:00.000', last_seen_at: '2025-12-19 10:00:00.000', first_seen_event_id: 'evt-dated', mapping_state: 'unranked', is_preferred: false}
+        - {active_snowplow_id: 'sp_UNDATED', id_type: 'domain_userid', id_value: 'user-partial', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2025-12-18 10:00:00.000', last_seen_at: '2025-12-18 10:00:00.000', first_seen_event_id: 'evt-undated', mapping_state: 'unranked', is_preferred: false}
 
-  - name: test__snowplow_identities_identifier_mapping__frozen_identifier_left_untouched
+  - name: test__snowplow_identities_identifier_mapping__full_tie_is_unranked
     description: >
-      Merge limit collapse. X has a leftover row under sp_B, which was merged
-      into sp_C in an earlier run, and a row under sp_NOAGE, which has no
-      created_at. sp_NOAGE puts X on the skip list, so the promise is: write
-      the new sp_D row from this batch and touch nothing else. The bug was
-      that the leftover row had already been rewritten to sp_C before the
-      skip list was checked, so the model emitted a brand-new (sp_C, X) row
-      for an identifier it claimed to have left alone.
+      Two owners share both last_seen_at and created_at, so there is nothing to choose
+      between them. The heuristic refuses rather than picking one by snowplow_id, even
+      with the var on.
     model: snowplow_identities_identifier_mapping
     overrides:
       vars:
         snowplow__merge_limit_collapse: true
-      macros:
-        is_incremental: true
-        snowplow_utils.is_run_with_new_events: "true"
     given:
-      - input: ref('snowplow_identities_identifier_mapping_this_run')
+      - input: ref('snowplow_identities_identifier_mapping_base')
         rows:
-          - {uuid: 'uuid-dx', active_snowplow_id: 'sp_DDDD', id_type: 'DOMAIN_USERID', id_value: 'shared-x', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2026-01-13 10:00:00.000', last_seen_at: '2026-01-13 10:00:00.000', first_seen_event_id: 'evt-dx'}
-      - input: ref('snowplow_identities_snowplow_id_mapping_this_run')
-        rows: []
-      - input: ref('snowplow_identities_snowplow_id_mapping')
-        rows:
-          - {snowplow_id: 'sp_BBBB', active_snowplow_id: 'sp_CCCC', merged_at: '2026-01-05 00:00:00.000', model_tstamp: '2026-01-05 00:05:00.000'}
-      - input: ref('snowplow_identities_new_identities')
-        rows:
-          - {snowplow_id: 'sp_CCCC', created_at: '2026-01-01 00:00:00.000'}
-          - {snowplow_id: 'sp_DDDD', created_at: '2026-01-10 00:00:00.000'}
-      - input: this
-        rows:
-          - {uuid: 'uuid-bx', active_snowplow_id: 'sp_BBBB', id_type: 'DOMAIN_USERID', id_value: 'shared-x', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2026-01-02 00:00:00.000', last_seen_at: '2026-01-03 00:00:00.000', first_seen_event_id: 'evt-bx'}
-          - {uuid: 'uuid-nx', active_snowplow_id: 'sp_NOAGE', id_type: 'DOMAIN_USERID', id_value: 'shared-x', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2026-01-04 00:00:00.000', last_seen_at: '2026-01-06 00:00:00.000', first_seen_event_id: 'evt-nx'}
-    expect:
-      rows:
-        - {active_snowplow_id: 'sp_DDDD', id_type: 'DOMAIN_USERID', id_value: 'shared-x', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2026-01-13 10:00:00.000', last_seen_at: '2026-01-13 10:00:00.000', first_seen_event_id: 'evt-dx'}
-
-  - name: test__snowplow_identities_identifier_mapping__evicted_identifier_not_collapsed
-    description: >
-      Merge limit collapse. shared-x has a row under sp_OLD, created in January
-      and last seen in June, and a row under sp_NEW, created in August and last
-      seen yesterday. This is what a TTL eviction leaves behind: shared-x went
-      quiet, the identity service evicted it from sp_OLD, and the next event
-      created sp_NEW for it. sp_OLD is older but the service resolves shared-x
-      to sp_NEW now, so collapsing into sp_OLD would move live history onto an
-      abandoned identity and delete the live row. Collapsing is only correct
-      when the oldest identity is also the one the identifier was last seen
-      under, which holds after a merge-limit link and fails after an eviction.
-      Here nothing moves, and only the row this batch touched is emitted.
-    model: snowplow_identities_identifier_mapping
-    overrides:
-      vars:
-        snowplow__merge_limit_collapse: true
-      macros:
-        is_incremental: true
-        snowplow_utils.is_run_with_new_events: "true"
-    given:
-      - input: ref('snowplow_identities_identifier_mapping_this_run')
-        rows:
-          - {uuid: 'uuid-nx', active_snowplow_id: 'sp_NEW', id_type: 'DOMAIN_USERID', id_value: 'shared-x', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2026-08-22 09:00:00.000', last_seen_at: '2026-08-22 09:00:00.000', first_seen_event_id: 'evt-batch'}
-      - input: ref('snowplow_identities_snowplow_id_mapping_this_run')
-        rows: []
+          - {id_key: 'k_one', snowplow_id: 'sp_ONE', id_type: 'domain_userid', id_value: 'user-tied', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2025-12-18 10:00:00.000', last_seen_at: '2025-12-18 10:00:00.000', first_seen_event_id: 'evt-one', load_tstamp: '2025-12-19 11:00:00.000'}
+          - {id_key: 'k_two', snowplow_id: 'sp_TWO', id_type: 'domain_userid', id_value: 'user-tied', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2025-12-18 10:00:00.000', last_seen_at: '2025-12-18 10:00:00.000', first_seen_event_id: 'evt-two', load_tstamp: '2025-12-19 11:00:00.000'}
       - input: ref('snowplow_identities_snowplow_id_mapping')
         rows: []
-      - input: ref('snowplow_identities_new_identities')
+      - input: ref('snowplow_identities_identities')
         rows:
-          - {snowplow_id: 'sp_OLD', created_at: '2026-01-01 00:00:00.000'}
-          - {snowplow_id: 'sp_NEW', created_at: '2026-08-01 00:00:00.000'}
-      - input: this
-        rows:
-          - {uuid: 'uuid-ox', active_snowplow_id: 'sp_OLD', id_type: 'DOMAIN_USERID', id_value: 'shared-x', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2026-01-02 00:00:00.000', last_seen_at: '2026-06-02 00:00:00.000', first_seen_event_id: 'evt-old'}
-          - {uuid: 'uuid-nx', active_snowplow_id: 'sp_NEW', id_type: 'DOMAIN_USERID', id_value: 'shared-x', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2026-08-02 00:00:00.000', last_seen_at: '2026-08-21 00:00:00.000', first_seen_event_id: 'evt-new'}
+          - {snowplow_id: 'sp_ONE', created_at: '2025-12-18 09:00:00.000'}
+          - {snowplow_id: 'sp_TWO', created_at: '2025-12-18 09:00:00.000'}
     expect:
       rows:
-        - {active_snowplow_id: 'sp_NEW', id_type: 'DOMAIN_USERID', id_value: 'shared-x', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2026-08-02 00:00:00.000', last_seen_at: '2026-08-22 09:00:00.000', first_seen_event_id: 'evt-new'}
-
-  - name: test__snowplow_identities_identifier_mapping__collapse_when_windows_overlap
-    description: >
-      Merge limit collapse. shared-x was created under sp_YOUNG, then an event
-      two seconds later carried an identifier already held by sp_OLD, which sits
-      at its merge limit, so the service linked shared-x into sp_OLD instead of
-      merging. The rest of the short visit still resolved to sp_YOUNG because
-      the link was not yet visible, so the identifier's latest event sits under
-      the younger identity. sp_OLD saw shared-x after sp_YOUNG first did, so the
-      two windows overlap, which an eviction cannot produce, and every row
-      collapses under sp_OLD with the history folded in.
-    model: snowplow_identities_identifier_mapping
-    overrides:
-      vars:
-        snowplow__merge_limit_collapse: true
-      macros:
-        is_incremental: true
-        snowplow_utils.is_run_with_new_events: "true"
-    given:
-      - input: ref('snowplow_identities_identifier_mapping_this_run')
-        rows:
-          - {uuid: 'uuid-yx2', active_snowplow_id: 'sp_YOUNG', id_type: 'DOMAIN_USERID', id_value: 'shared-x', first_app_id: 'mobile', last_app_id: 'mobile', first_seen_at: '2026-08-19 16:24:28.000', last_seen_at: '2026-08-19 16:24:28.000', first_seen_event_id: 'evt-yx2'}
-      - input: ref('snowplow_identities_snowplow_id_mapping_this_run')
-        rows: []
-      - input: ref('snowplow_identities_snowplow_id_mapping')
-        rows: []
-      - input: ref('snowplow_identities_new_identities')
-        rows:
-          - {snowplow_id: 'sp_OLD', created_at: '2026-05-27 06:40:24.000'}
-          - {snowplow_id: 'sp_YOUNG', created_at: '2026-08-19 16:24:23.000'}
-      - input: this
-        rows:
-          - {uuid: 'uuid-ox', active_snowplow_id: 'sp_OLD', id_type: 'DOMAIN_USERID', id_value: 'shared-x', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2026-08-19 16:24:25.000', last_seen_at: '2026-08-19 16:24:25.000', first_seen_event_id: 'evt-ox'}
-          - {uuid: 'uuid-yx', active_snowplow_id: 'sp_YOUNG', id_type: 'DOMAIN_USERID', id_value: 'shared-x', first_app_id: 'mobile', last_app_id: 'mobile', first_seen_at: '2026-08-19 16:24:23.000', last_seen_at: '2026-08-19 16:24:24.000', first_seen_event_id: 'evt-yx'}
-    expect:
-      rows:
-        - {active_snowplow_id: 'sp_OLD', id_type: 'DOMAIN_USERID', id_value: 'shared-x', first_app_id: 'mobile', last_app_id: 'mobile', first_seen_at: '2026-08-19 16:24:23.000', last_seen_at: '2026-08-19 16:24:28.000', first_seen_event_id: 'evt-yx'}
-
-  - name: test__snowplow_identities_identifier_mapping__collapse_leaves_eviction_gap
-    description: >
-      Merge limit collapse. sp_OLD last saw shared-y in January and sp_YOUNG
-      first saw it in March: the identifier was evicted from sp_OLD and later
-      picked up by a new identity. sp_OLD is the oldest, but it never saw the
-      identifier at or after sp_YOUNG first did, so nothing is moved. Only the
-      batch row is emitted, folded onto sp_YOUNG's existing history, and the
-      sp_OLD row is left as it stands.
-    model: snowplow_identities_identifier_mapping
-    overrides:
-      vars:
-        snowplow__merge_limit_collapse: true
-      macros:
-        is_incremental: true
-        snowplow_utils.is_run_with_new_events: "true"
-    given:
-      - input: ref('snowplow_identities_identifier_mapping_this_run')
-        rows:
-          - {uuid: 'uuid-yy2', active_snowplow_id: 'sp_YOUNG', id_type: 'DOMAIN_USERID', id_value: 'shared-y', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2026-03-03 10:00:00.000', last_seen_at: '2026-03-03 10:00:00.000', first_seen_event_id: 'evt-yy2'}
-      - input: ref('snowplow_identities_snowplow_id_mapping_this_run')
-        rows: []
-      - input: ref('snowplow_identities_snowplow_id_mapping')
-        rows: []
-      - input: ref('snowplow_identities_new_identities')
-        rows:
-          - {snowplow_id: 'sp_OLD', created_at: '2026-01-01 00:00:00.000'}
-          - {snowplow_id: 'sp_YOUNG', created_at: '2026-03-01 00:00:00.000'}
-      - input: this
-        rows:
-          - {uuid: 'uuid-oy', active_snowplow_id: 'sp_OLD', id_type: 'DOMAIN_USERID', id_value: 'shared-y', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2026-01-01 00:00:00.000', last_seen_at: '2026-01-05 00:00:00.000', first_seen_event_id: 'evt-oy'}
-          - {uuid: 'uuid-yy', active_snowplow_id: 'sp_YOUNG', id_type: 'DOMAIN_USERID', id_value: 'shared-y', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2026-03-01 00:00:00.000', last_seen_at: '2026-03-02 00:00:00.000', first_seen_event_id: 'evt-yy'}
-    expect:
-      rows:
-        - {active_snowplow_id: 'sp_YOUNG', id_type: 'DOMAIN_USERID', id_value: 'shared-y', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2026-03-01 00:00:00.000', last_seen_at: '2026-03-03 10:00:00.000', first_seen_event_id: 'evt-yy'}
-
-  - name: test__snowplow_identities_identifier_mapping__collapse_leaves_late_event_after_eviction
-    description: >
-      Merge limit collapse. shared-w was evicted from sp_OLD in January and
-      picked up by sp_YOUNG, created in March. A late event for shared-w with a
-      December derived_tstamp then arrives and is resolved to sp_YOUNG, which
-      stretches sp_YOUNG's window back past sp_OLD's. Neither collapse
-      condition holds: sp_YOUNG has the latest event, and sp_OLD first saw the
-      identifier before sp_YOUNG was created. Nothing moves.
-    model: snowplow_identities_identifier_mapping
-    overrides:
-      vars:
-        snowplow__merge_limit_collapse: true
-      macros:
-        is_incremental: true
-        snowplow_utils.is_run_with_new_events: "true"
-    given:
-      - input: ref('snowplow_identities_identifier_mapping_this_run')
-        rows:
-          - {uuid: 'uuid-yw2', active_snowplow_id: 'sp_YOUNG', id_type: 'DOMAIN_USERID', id_value: 'shared-w', first_app_id: 'mobile', last_app_id: 'mobile', first_seen_at: '2025-12-28 09:00:00.000', last_seen_at: '2025-12-28 09:00:00.000', first_seen_event_id: 'evt-late'}
-      - input: ref('snowplow_identities_snowplow_id_mapping_this_run')
-        rows: []
-      - input: ref('snowplow_identities_snowplow_id_mapping')
-        rows: []
-      - input: ref('snowplow_identities_new_identities')
-        rows:
-          - {snowplow_id: 'sp_OLD', created_at: '2026-01-01 00:00:00.000'}
-          - {snowplow_id: 'sp_YOUNG', created_at: '2026-03-01 00:00:00.000'}
-      - input: this
-        rows:
-          - {uuid: 'uuid-ow', active_snowplow_id: 'sp_OLD', id_type: 'DOMAIN_USERID', id_value: 'shared-w', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2026-01-01 00:00:00.000', last_seen_at: '2026-01-05 00:00:00.000', first_seen_event_id: 'evt-ow'}
-          - {uuid: 'uuid-yw', active_snowplow_id: 'sp_YOUNG', id_type: 'DOMAIN_USERID', id_value: 'shared-w', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2026-03-01 00:00:00.000', last_seen_at: '2026-03-02 00:00:00.000', first_seen_event_id: 'evt-yw'}
-    expect:
-      rows:
-        - {active_snowplow_id: 'sp_YOUNG', id_type: 'DOMAIN_USERID', id_value: 'shared-w', first_app_id: 'mobile', last_app_id: 'web', first_seen_at: '2025-12-28 09:00:00.000', last_seen_at: '2026-03-02 00:00:00.000', first_seen_event_id: 'evt-late'}
+        - {active_snowplow_id: 'sp_ONE', id_type: 'domain_userid', id_value: 'user-tied', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2025-12-18 10:00:00.000', last_seen_at: '2025-12-18 10:00:00.000', first_seen_event_id: 'evt-one', mapping_state: 'unranked', is_preferred: false}
+        - {active_snowplow_id: 'sp_TWO', id_type: 'domain_userid', id_value: 'user-tied', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2025-12-18 10:00:00.000', last_seen_at: '2025-12-18 10:00:00.000', first_seen_event_id: 'evt-two', mapping_state: 'unranked', is_preferred: false}

@@ -1,3 +1,75 @@
+snowplow_identities 0.2.0 (unreleased)
+---------------------------------------
+See MIGRATION.md for upgrade steps and rebuild recipes for the removed tables.
+
+Breaking changes
+- `snowplow_identities_id_changes` removed.
+- `snowplow_identities_id_mapping_scd` removed.
+- `snowplow_identities_new_identities` renamed to `snowplow_identities_identities`, and its
+  per-identifier columns removed. Those values live in
+  `snowplow_identities_identifier_mapping` at the identifier grain.
+- `snowplow_identities_snowplow_id_mapping` and `snowplow_identities_merge_events` gain a
+  `load_tstamp` column and are now partitioned on it. Run a package-scoped full refresh
+  for the initial upgrade; this also converts the existing identifier table to a view.
+- `snowplow__allow_refresh`, `snowplow__dev_target_name` and the `models_to_remove` var are
+  removed with the manifest. `--full-refresh` now rebuilds from `snowplow__start_date`.
+
+Changed
+- Retain the 0.1.0 Databricks support across the new models, including typed payload
+  extraction, identifier hashing and partition-date columns.
+- `snowplow_identities_identifier_mapping` is now a view over the new
+  `snowplow_identities_identifier_mapping_base` table, resolved to the current
+  `active_snowplow_id` at read time. The resolved-identifier grain is retained; `id_type` is normalized to lowercase.
+- Each model tracks its own progress off its own `max(load_tstamp)` instead of a shared
+  manifest, retiring the manifest, the base layer, the `_this_run` scratch layer and the
+  manifest-maintenance hooks. 15 models become 5 plus a view, and every dependency is a real `ref()`.
+- Derived models extend their windows through their upstream staging or merge log,
+  including on the initial build. Both atomic readers seek the first eligible day across
+  empty periods without consuming every remaining populated day.
+- `snowplow_identities_stg_identity_events` replaces whole days instead of matching every
+  `event_id`. BigQuery uses `insert_overwrite` with `copy_partitions`, Snowflake uses
+  `delete+insert` keyed on the load date. The window is day-aligned, so this is equivalent to
+  the upsert and takes the per-event key matching out of those runs. Databricks uses
+  `merge` on `event_id` to retain support for SQL / Runtime 12.2 LTS; partition overwrite
+  on SQL warehouses requires newer runtime capabilities.
+
+Added
+- Run-window logging, replacing the manifest framework's `print_run_limits`.
+- `snowplow__lookback_days` (default 1), the overlap re-scanned each run for late-arriving
+  data.
+- `snowplow__partition_tstamp`, `snowplow__partition_tstamp_type` and
+  `snowplow__partition_buffer_days`, for when `atomic.events` is partitioned on something
+  other than `load_tstamp`.
+- `snowplow_identities_identifier_mapping` gains `mapping_state` and `is_preferred`.
+  `mapping_state` says how many identities an identifier resolves to, and whether they can
+  be put in age order. `is_preferred` marks the row to use when you want one row per
+  identifier.
+- `snowplow__merge_limit_collapse` now retains all owners rather than deleting rows. It
+  lets `is_preferred` pick the identity
+  holding an identifier's most recent sighting when the identifier has several. Only safe
+  when no identifier is configured as unique in the identity service.
+
+Fixed
+- Delayed merges resolve through stored parents, and stored children follow a root that
+  merges again even if they have expired from the service's cumulative payload.
+- Empty initial or incremental source windows no longer stall identity or merge readers.
+- Reject upgrades from 0.1.0 before model execution when the required full refresh is absent.
+- Merges no longer rewrite, re-point or delete identifier rows.
+  `snowplow_identities_identifier_mapping_base` is keyed on an immutable surrogate of
+  (snowplow_id, id_type, id_value).
+- An identifier that later reappears under a new identity keeps both rows rather than
+  overwriting the first.
+- Keys untouched for longer than `snowplow__upsert_lookback_days` no longer duplicate on
+  upsert. `snowplow_optimize` is off on `identities`, `identifier_mapping_base` and
+  `snowplow_id_mapping`.
+- `identity_merge` events are filtered to the `snowplow-identities` app_id rather than
+  `snowplow__app_id`, which dropped every merge event when set.
+
+Removed
+- The `snowplow_identities_snowplow_id_mapping_affected` pre-hook snapshot table and the
+  `snowplow_identities_internal` source that read it.
+- The `delete_stale_identifier_mapping_rows` macro and its post-hook.
+
 snowplow_identities 0.1.0 (2026-10-14)
 ------------------------------------
 Initial release of the Snowplow Identities dbt package.

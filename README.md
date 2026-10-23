@@ -5,66 +5,48 @@
 
 # snowplow-identities
 
-A dbt package for building robust incremental identity resolution models from Snowplow data. Processes identity merge events to maintain mappings between user identifiers and canonical Snowplow IDs, with full audit history of identity lifecycle changes.
+A dbt package that resolves Snowplow identities. It reads the identity context and
+`identity_merge` events from `atomic.events`, then keeps track of which Snowplow IDs belong to
+the same person after merges, and which of your own identifiers point at them.
 
-## Features
-
-- **Identity Resolution**: Maps all child snowplow_ids to their current active parent after merges
-- **Identifier Mapping**: Links external identifiers (domain_userid, user_id, etc.) to canonical Snowplow IDs
-- **Audit Trail**: Complete history of identity creation and merge events
-- **Incremental Processing**: Efficient delta updates using Snowplow's incremental framework
-- **Multi-Warehouse**: Adapter-specific SQL for BigQuery, Snowflake and Databricks
-
-## Core Models
+## Models
 
 | Model | Description |
 |-------|-------------|
-| `snowplow_identities_snowplow_id_mapping` | Current child → parent ID mappings |
-| `snowplow_identities_id_mapping_scd` | SCD Type 2 history of ID mapping changes with effective_at/superseded_at timestamps |
-| `snowplow_identities_identifier_mapping` | External identifiers → active Snowplow ID lookup |
-| `snowplow_identities_id_changes` | Audit log of all identity lifecycle events |
-| `snowplow_identities_merge_events` | History of identity merge operations |
+| `snowplow_identities_snowplow_id_mapping` | Each child `snowplow_id` and the active parent it now resolves to. Join your events here to get one ID per person. |
+| `snowplow_identities_identifier_mapping` | Your identifiers, such as `domain_userid` and `user_id`, against the `active_snowplow_id` that currently owns them. A view, resolved at read time. |
+| `snowplow_identities_identities` | One row per `snowplow_id`, with when it was created and where it was first and last seen. |
+| `snowplow_identities_merge_events` | The `identity_merge` event log, keeping the raw merge payloads. |
 
+Two more models support these. `snowplow_identities_identifier_mapping_base` is the table the
+`identifier_mapping` view resolves against, and `snowplow_identities_stg_identity_events` holds
+the identity context events read from `atomic.events`.
 
 Please refer to the [doc site](https://docs.snowplow.io/docs/modeling-your-data/modeling-your-data-with-dbt/dbt-models/dbt-identities-data-model/) for a full breakdown of the package.
 
-Please note that this data model is under the Snowplow Personal & Academic License (SPAL). For further details please refer to our [documenation site](https://docs.snowplow.io/docs/contributing/personal-and-academic-license-faq/).
+Please note that this data model is under the Snowplow Personal & Academic License (SPAL). For
+further details please refer to our [documentation site](https://docs.snowplow.io/docs/contributing/personal-and-academic-license-faq/).
 
-### Getting Started
+### Getting started
 
 The easiest way to get started is to follow our [QuickStart guide](https://docs.snowplow.io/docs/modeling-your-data/modeling-your-data-with-dbt/dbt-quickstart/identities/).
 
-Install this release in `packages.yml`, then run `dbt deps`:
+Upgrading from 0.1.0 is a breaking change. See [MIGRATION.md](MIGRATION.md) for the steps and
+for recipes rebuilding the tables this release removes.
 
-```yaml
-packages:
-  - git: "https://github.com/snowplow-incubator/dbt-snowplow-identities.git"
-    revision: "0.1.0"
-```
+### Adapter support
 
-The [generated model documentation](https://snowplow-incubator.github.io/dbt-snowplow-identities/)
-is built from `main`; generate docs locally when you need the exact release's schema.
+BigQuery, Snowflake and Databricks.
 
-### Adapter Support
-
-The package includes adapters for BigQuery, Snowflake and Databricks.
-
-For Databricks, use `dbt-databricks` and a Databricks SQL warehouse or Runtime
-12.2 LTS or later (the models use `UNPIVOT`). Identity entities must be typed arrays of
-structs and merge events must be typed structs, as produced by the Snowplow
-Databricks loader. Incremental output tables use Delta and date partitions.
-
-Set `snowplow__databricks_catalog` to the catalog containing the source events
-(default: `hive_metastore`), and `snowplow__atomic_schema` to their schema.
-Configure the destination catalog and schema in the dbt Databricks profile.
-The `spark__` macros are shared through adapter dispatch; standalone Spark is
-not covered by this package's warehouse integration suite.
+Databricks requires SQL / Runtime 12.2 LTS or later and typed Snowplow identity entities.
+Standalone Spark is not included in the tested adapter support.
 
 ### Requirements
 
-- A dataset of web events from the [Snowplow JavaScript tracker][tracker-docs] must be available in the database.
-- Have the [`identity` context][identity-context] enabled.
-- dbt-core version 1.10.6 or greater, below 2.0.0
+- Events carrying the `com.snowplowanalytics.snowplow/identity` context, version 2, available
+  in your warehouse.
+- dbt-core 1.10.6 or greater.
+- `snowplow_utils` 1.0.1 or greater, which `dbt deps` installs for you.
 
 # Copyright and license
 
@@ -79,8 +61,8 @@ This distribution is all licensed under the [Snowplow Personal and Academic Lice
 [snowplow]: https://github.com/snowplow/snowplow
 [docs]: https://docs.snowplow.io/
 
-[release-image]: https://img.shields.io/github/v/release/snowplow-incubator/dbt-snowplow-identities?sort=semver
-[releases]: https://github.com/snowplow-incubator/dbt-snowplow-identities/releases
+[release-image]: https://img.shields.io/github/v/release/snowplow/dbt-snowplow-identities?sort=semver
+[releases]: https://github.com/snowplow/dbt-snowplow-identities/releases
 
 [tracker-classification]: https://docs.snowplow.io/docs/collecting-data/collecting-from-own-applications/tracker-maintenance-classification/
 [early-release]: https://img.shields.io/static/v1?style=flat&label=Snowplow&message=Early%20Release&color=014477&labelColor=9ba0aa&logo=data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAMAAAAoLQ9TAAAAeFBMVEVMaXGXANeYANeXANZbAJmXANeUANSQAM+XANeMAMpaAJhZAJeZANiXANaXANaOAM2WANVnAKWXANZ9ALtmAKVaAJmXANZaAJlXAJZdAJxaAJlZAJdbAJlbAJmQAM+UANKZANhhAJ+EAL+BAL9oAKZnAKVjAKF1ALNBd8J1AAAAKHRSTlMAa1hWXyteBTQJIEwRgUh2JjJon21wcBgNfmc+JlOBQjwezWF2l5dXzkW3/wAAAHpJREFUeNokhQOCA1EAxTL85hi7dXv/E5YPCYBq5DeN4pcqV1XbtW/xTVMIMAZE0cBHEaZhBmIQwCFofeprPUHqjmD/+7peztd62dWQRkvrQayXkn01f/gWp2CrxfjY7rcZ5V7DEMDQgmEozFpZqLUYDsNwOqbnMLwPAJEwCopZxKttAAAAAElFTkSuQmCC

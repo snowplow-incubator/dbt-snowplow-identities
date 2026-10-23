@@ -1,0 +1,47 @@
+version: 2
+unit_tests:
+- name: test__merge_events__gap_without_identity_events
+  description: The atomic merge reader advances across a gap even when the identity staging table is empty.
+  model: snowplow_identities_merge_events
+  overrides:
+    macros:
+      is_incremental: true
+      # Unit source CTEs have no warehouse column metadata.
+      snowplow_utils.get_columns_in_relation_by_column_prefix:
+      - name: unstruct_event_com_snowplowanalytics_snowplow_identity_merge_2
+        mode: NULLABLE
+        dtype: RECORD
+        fields:
+        - {name: snowplow_id, mode: NULLABLE, dtype: STRING}
+        - {name: merged, mode: REPEATED, dtype: RECORD}
+        - {name: merges, mode: REPEATED, dtype: STRING}
+    vars:
+      snowplow__start_date: '2020-01-02'
+      snowplow__backfill_limit_days: 1
+      snowplow__identities_app_id:
+      - web
+  given:
+  - input: source('atomic', 'events')
+    format: sql
+    rows: |-
+      select 'after_gap' as event_id, 'identity_merge' as event_name, 'web' as app_id,
+      cast('2020-01-10 12:00:00' as timestamp) as load_tstamp,
+      cast('2020-01-10 12:00:00' as timestamp) as collector_tstamp,
+      cast('2020-01-10 12:00:00' as timestamp) as derived_tstamp,
+      {% if target.type == 'bigquery' %}struct('root' as snowplow_id,
+        [struct('child' as snowplow_id, cast(null as timestamp) as created_at,
+         timestamp '2020-01-10 10:00:00' as merged_at, 'trigger' as triggering_event_id)] as merged,
+        ['after_gap'] as merges)
+      {% elif target.type in ['databricks', 'spark'] %}from_json('{"snowplow_id":"root","merged":[{"snowplow_id":"child","merged_at":"2020-01-10 10:00:00","triggering_event_id":"trigger"}],"merges":["after_gap"]}', 'struct<snowplow_id:string,merged:array<struct<snowplow_id:string,created_at:timestamp,merged_at:timestamp,triggering_event_id:string>>,merges:array<string>>')
+      {% else %}parse_json('{"snowplow_id":"root","merged":[{"snowplow_id":"child","merged_at":"2020-01-10 10:00:00","triggering_event_id":"trigger"}],"merges":["after_gap"]}'){% endif %} as unstruct_event_com_snowplowanalytics_snowplow_identity_merge_2
+  - input: ref('snowplow_identities_stg_identity_events')
+    rows: []
+  - input: this
+    rows:
+    - merge_event_id: old
+      load_tstamp: '2020-01-02 12:00:00'
+  expect:
+    rows:
+    - merge_event_id: after_gap
+      active_snowplow_id: root
+      load_tstamp: '2020-01-10 12:00:00'

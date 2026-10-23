@@ -12,20 +12,35 @@ Welcome to the model documentation site for the snowplow-identities dbt package.
 
 ## Overview
 
-This model consists of a series of modules, each producing a table which serves as the input to the next module. The 'standard' modules are:
+The package resolves Snowplow identities into a single view of a person, in two layers.
 
-- Base: Performs the incremental logic, outputting the table `snowplow_identities_base_events_this_run` which contains a de-duped data set of all events required for the current run of the model.
+**Staging** reads `atomic.events` directly:
 
-Each module produces a table which acts as the input to the subsequent module (the `_this_run` tables), and updates a derived table - with the exception of the Base module, which takes atomic data as its input, and does not update a derived table.
+- `snowplow_identities_stg_identity_events`. One row per event carrying the identity context, with the configured identifier columns kept un-pivoted.
+- `snowplow_identities_merge_events`. An append-only log of every `identity_merge` event, and also a derived output, since it is the only place the raw merge payloads are retained.
+
+**Derived** is the customer surface:
+
+- `snowplow_identities_snowplow_id_mapping`. Current child to active-parent mapping. Join your events' `snowplow_id` here to resolve them to one unified identity.
+- `snowplow_identities_identifier_mapping`. A view listing every external identifier against its current `active_snowplow_id`. Use this to look up a person by email or user ID for activation downstream.
+- `snowplow_identities_identities`. One row per identity, with when it was created and where it was first and last seen.
+
+Two design choices are worth knowing about.
+
+*Resolution happens at read time.* `identifier_mapping` is a view over `snowplow_identities_identifier_mapping_base`, whose rows are keyed on an immutable surrogate and never rewritten. A merge is reflected the moment `snowplow_id_mapping` updates, and an identifier that expires and later reappears under a new identity keeps both records.
+
+*Each model tracks its own progress.* Every model asks its own table for the newest `load_tstamp` it holds and processes forward from there, in windows of at least `snowplow__backfill_limit_days`. There is no manifest and no run hooks, so a failed run leaves the affected model slightly behind and it catches up on the next one. Models whose events are sparse, such as `merge_events`, extend their window to `snowplow_identities_stg_identity_events`' watermark so an empty window cannot strand them. Each run logs the window it is processing.
 
 ## Installation
 
-Install the tagged release in `packages.yml`, then run `dbt deps`:
+This branch describes the unreleased 0.2.0 candidate. Once released, install its tag in
+`packages.yml`, then run `dbt deps`. The published 0.1.0 package uses the previous model
+layout; follow MIGRATION.md when upgrading.
 
 ```yaml
 packages:
   - git: "https://github.com/snowplow-incubator/dbt-snowplow-identities.git"
-    revision: "0.1.0"
+    revision: "0.2.0"
 ```
 
 See the [dbt package documentation][dbt-package-docs] for more information.

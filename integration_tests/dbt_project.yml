@@ -31,7 +31,6 @@ models:
   snowplow_identities_integration_tests:
     +materialized: table
     +schema: "snplw_identities_int_tests"
-    +source:
     +bind: false
 vars:
   snowplow_identities:
@@ -44,6 +43,7 @@ vars:
     snowplow__license_accepted: true
     snowplow__identifiers: [{'reference': 'domain_userid', 'alias': 'domain_userid'}, {'reference': 'user_id', 'alias': 'user_id'}, {'reference': 'network_userid', 'alias': 'network_userid'}]
     snowplow__app_id: []
+    snowplow__identities_app_id: ['web'] # dbtseed emits merge events under the tracker app_id, not the service's
 seeds:
   snowplow_identities_integration_tests:
     +schema: "snplw_identities_int_tests"
@@ -66,13 +66,13 @@ seeds:
         collector_tstamp: timestamp
         derived_tstamp: timestamp
         merged_at: timestamp
-        effective_at: timestamp
-        superseded_at: timestamp
         first_seen_at: timestamp
         last_seen_at: timestamp
         first_derived_tstamp: timestamp
         last_derived_tstamp: timestamp
         created_at: timestamp
+        is_preferred: boolean
+        is_preferred_with_collapse: boolean
   +quote_columns: false
 flags:
   require_generic_test_arguments_property: true

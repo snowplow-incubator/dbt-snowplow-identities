@@ -1,104 +1,49 @@
 # snowplow-identities integration tests
 
-Integration test suite for the snowplow-identities dbt package.
-
-## Overview
-
-The tests validate the full identity resolution pipeline end-to-end by:
-
-1. Seeding 76 source events across 12 scenario groups
-2. Running dbt 4 times (1 full-refresh + 3 incremental) to simulate batch processing
-3. Comparing 6 derived output tables against pre-computed expected results
-
-## Running Tests
+Run from this directory:
 
 ```bash
 bash .scripts/integration_test.sh -d {warehouse}
 ```
 
-Supported warehouses:
-- `snowflake`
-- `bigquery`
-- `databricks`
-- `all` (iterates through all supported warehouses)
+Supported targets are `snowflake`, `bigquery`, `databricks`, or `all`.
+The suite seeds recorded identity-service events, runs one full refresh and three
+incremental batches, and compares the four public outputs with reviewed expected
+CSVs. It repeats those runs with `snowplow__merge_limit_collapse: true`. In 0.2.0
+that option keeps every owner and sets `is_preferred`; it does not delete rows.
+The expected seed records both flag settings, including the TTL reappearance
+case. Unique-identifier scenarios are excluded from the opt-in comparison because
+the heuristic is only safe when the service has no configured unique identifiers.
+All dbt unit tests run on all three warehouses, including typed Databricks merge
+payloads. See [data/README.md](data/README.md) for fixture provenance.
 
 Databricks uses `DATABRICKS_TEST_HOST`, `DATABRICKS_TEST_HTTP_PATH` and
 `DATABRICKS_TEST_TOKEN`. Set `DATABRICKS_TEST_CATALOG` for a Unity Catalog test
 catalog; the default is `hive_metastore`. The test identity needs permission to
-create and drop the isolated `gh_sp_identities_dbt_*` test schemas. CI uses
-Python 3.12 and the latest dbt Core and adapter 1.x releases, with separate schemas
-for each workflow run. Snowflake CI uses `SNOWFLAKE_TEST_PRIVATE_KEY`.
+create and drop isolated `gh_sp_identities_dbt_*` test schemas. CI uses Python 3.12
+and the latest dbt Core and adapter 1.x releases, with separate schemas per workflow
+run. Snowflake CI uses `SNOWFLAKE_TEST_PRIVATE_KEY`.
 
-Both default and merge-limit-collapse runs are tested. Snowflake-specific SQL
-fixtures are excluded on other warehouses; the full integration comparisons
-still run. A Databricks unit fixture also checks typed, empty and null identity
-arrays. Native Databricks execution is required before declaring support ready.
-
-### Offline SQL regressions
+## Offline SQL regressions
 
 ```bash
 pip install -r python/requirements.txt
 python -m pytest python -q
 ```
 
-These tests render package SQL, parse it as Databricks SQL and execute translated
-queries in DuckDB using the existing identity-mapping fixtures. They cover
-merge-limit behaviour, partition columns, hashing and field extraction. They do
-not validate Databricks Delta materializations, permissions or runtime planning.
+These render package SQL, parse it as Databricks SQL and execute translated queries
+in DuckDB against the existing mapping fixtures. They also check partition-column
+projection, normalized hashing, typed empty/null payloads, and the real window predicates
+for sparse streams and delayed merges.
+They do not validate warehouse materializations, permissions, runtime planning; those require the native dbt integration and unit tests.
 
-## Batch Strategy
+## Upgrade validation
 
-Events are spread across 4 batches via `load_tstamp` windows:
-
-| Batch | Date | Type | Events |
-|-------|------|------|--------|
-| 1 | 2026-01-01 | full-refresh | 52 |
-| 2 | 2026-01-02 | incremental | 18 |
-| 3 | 2026-01-03 | incremental | 5 |
-| 4 | 2026-01-04 | incremental | 1 |
-
-## ID Naming Convention
-
-All test data uses self-documenting IDs with group prefixes:
-
-- Snowplow IDs: `sp_<GROUP>_<LETTER>` (e.g., `sp_CHAIN_A`)
-- Domain user IDs: `duid_<GROUP>_<LETTER>` (e.g., `duid_CHAIN_A`)
-- User IDs: `uid_<GROUP>_<LETTER>` (e.g., `uid_SIMPLE_A`)
-- Event IDs: `evt_<GROUP>_<NN>` (e.g., `evt_CHAIN_03`)
-
-## Scenario Groups
-
-See [SCENARIOS.md](SCENARIOS.md) for the complete registry mapping each group to the unit tests it covers.
-
-| Group | Story | Batches |
-|-------|-------|---------|
-| SIMPLE | Basic create + merge | 1, 4 |
-| CHAIN | Transitive chain + repointing | 1, 2, 3 |
-| FANIN | Fan-in merge + repointing | 1, 2 |
-| FANOUT | Multi-child single event + history resolution | 1, 2 |
-| DIAMOND | Diamond topology | 1, 2 |
-| DISJOINT | Isolated groups | 1, 2 |
-| LONGCHAIN | Deep chain within batch | 1 |
-| ALTCHAIN | Alternating history/new chain | 1, 2 |
-| MERGEONLY | Merge without creation in same batch | 1, 2 |
-| MULTIID | Multiple identifier types + cross-app | 1, 3 |
-| LATE | Late-arriving data | 1, 3 |
-| REMAP | Child re-merged to different parent | 1, 3 |
-
-## Adding New Scenarios
-
-1. Choose a short prefix (e.g., `NEWSCN`)
-2. Add events to `data/source/snowplow_identities_events.csv`
-3. Update all 6 expected CSVs in `data/expected/`
-4. Add a section to `SCENARIOS.md`
-
-## Validated Tables
-
-After all 4 runs, these derived tables are compared against expected seeds:
-
-- `snowplow_identities_snowplow_id_mapping`
-- `snowplow_identities_id_changes`
-- `snowplow_identities_identifier_mapping`
-- `snowplow_identities_id_mapping_scd`
-- `snowplow_identities_new_identities`
-- `snowplow_identities_merge_events`
+PR checks include upgrade validation; manual runs can request it with `test_upgrade: true`.
+After the normal suite,
+it builds the published 0.1.0 package in another isolated schema, applies the
+full refresh documented in MIGRATION.md to the populated 0.1.0 tables. Before that,
+it verifies an ordinary incremental upgrade is rejected and retains the old tables.
+It checks table-to-view conversion and compares the upgraded outputs with the same
+expected fixtures, including another incremental run for idempotency. Workflow
+cleanup removes both sets of test schemas.
