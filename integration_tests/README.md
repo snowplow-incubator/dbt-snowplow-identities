@@ -36,3 +36,12 @@ in DuckDB against the existing mapping fixtures. They also check partition-colum
 projection, normalized hashing, and typed empty/null identity and merge payloads.
 They do not validate warehouse materializations, permissions, runtime planning or
 watermark advancement; those require the native dbt integration and unit tests.
+
+## Upgrade validation
+
+The `pr_tests` manual workflow accepts `test_upgrade: true`. After the normal suite,
+it builds the published 0.1.0 package in another isolated schema, applies the two
+table drops documented in MIGRATION.md, then runs the candidate against that state.
+It checks table-to-view conversion and compares the upgraded outputs with the same
+expected fixtures, including another incremental run for idempotency. Workflow
+cleanup removes both sets of test schemas.
