@@ -7,6 +7,15 @@ unit_tests:
   overrides:
     macros:
       is_incremental: false
+      # dbt's unit-test source is a CTE with no INFORMATION_SCHEMA metadata.
+      # Supply only its column shape; extraction and window SQL still run normally.
+      snowplow_utils.get_columns_in_relation_by_column_prefix:
+      - name: contexts_com_snowplowanalytics_snowplow_identity_2
+        mode: REPEATED
+        dtype: RECORD
+        fields:
+        - {name: snowplow_id, mode: NULLABLE, dtype: STRING}
+        - {name: created_at, mode: NULLABLE, dtype: TIMESTAMP}
     vars:
       snowplow__start_date: '2020-01-02'
       snowplow__backfill_limit_days: 1
@@ -63,6 +72,15 @@ unit_tests:
   overrides:
     macros:
       is_incremental: true
+      # dbt's unit-test source is a CTE with no INFORMATION_SCHEMA metadata.
+      # Supply only its column shape; extraction and window SQL still run normally.
+      snowplow_utils.get_columns_in_relation_by_column_prefix:
+      - name: contexts_com_snowplowanalytics_snowplow_identity_2
+        mode: REPEATED
+        dtype: RECORD
+        fields:
+        - {name: snowplow_id, mode: NULLABLE, dtype: STRING}
+        - {name: created_at, mode: NULLABLE, dtype: TIMESTAMP}
     vars:
       snowplow__start_date: '2020-01-02'
       snowplow__backfill_limit_days: 1
@@ -124,6 +142,15 @@ unit_tests:
   overrides:
     macros:
       is_incremental: true
+      # dbt's unit-test source is a CTE with no INFORMATION_SCHEMA metadata.
+      # Supply only its column shape; extraction and window SQL still run normally.
+      snowplow_utils.get_columns_in_relation_by_column_prefix:
+      - name: contexts_com_snowplowanalytics_snowplow_identity_2
+        mode: REPEATED
+        dtype: RECORD
+        fields:
+        - {name: snowplow_id, mode: NULLABLE, dtype: STRING}
+        - {name: created_at, mode: NULLABLE, dtype: TIMESTAMP}
     vars:
       snowplow__start_date: '2020-01-02'
       snowplow__backfill_limit_days: 1

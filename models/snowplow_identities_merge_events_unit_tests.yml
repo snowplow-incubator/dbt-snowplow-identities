@@ -6,6 +6,15 @@ unit_tests:
   overrides:
     macros:
       is_incremental: true
+      # Unit source CTEs have no warehouse column metadata.
+      snowplow_utils.get_columns_in_relation_by_column_prefix:
+      - name: unstruct_event_com_snowplowanalytics_snowplow_identity_merge_2
+        mode: NULLABLE
+        dtype: RECORD
+        fields:
+        - {name: snowplow_id, mode: NULLABLE, dtype: STRING}
+        - {name: merged, mode: REPEATED, dtype: RECORD}
+        - {name: merges, mode: REPEATED, dtype: STRING}
     vars:
       snowplow__start_date: '2020-01-02'
       snowplow__backfill_limit_days: 1
