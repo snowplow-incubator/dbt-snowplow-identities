@@ -1,4 +1,4 @@
-snowplow-identities 0.2.0 (2026-YY-ZZ)
+snowplow_identities 0.2.0 (unreleased)
 ---------------------------------------
 See MIGRATION.md for upgrade steps and rebuild recipes for the removed tables.
 
@@ -28,7 +28,9 @@ Changed
 - `snowplow_identities_stg_identity_events` replaces whole days instead of matching every
   `event_id`. BigQuery uses `insert_overwrite` with `copy_partitions`, Snowflake uses
   `delete+insert` keyed on the load date. The window is day-aligned, so this is equivalent to
-  the upsert and takes the per-event key matching out of every run.
+  the upsert and takes the per-event key matching out of those runs. Databricks uses
+  `merge` on `event_id` to retain support for SQL / Runtime 12.2 LTS; partition overwrite
+  on SQL warehouses requires newer runtime capabilities.
 
 Added
 - Run-window logging, replacing the manifest framework's `print_run_limits`.
