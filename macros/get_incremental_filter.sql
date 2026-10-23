@@ -46,7 +46,7 @@ You may obtain a copy of the Snowplow Personal and Academic License Version 1.0 
   {%- endif -%}
 
   {%- if is_incremental() -%}
-    {%- set lower_day = dbt.dateadd('day', 1 - lookback, snowplow_identities.watermark_day(this, start_ts)) -%}
+    {%- set lower_day = snowplow_identities.lower_bound_day(this, start_ts, lookback) -%}
     {%- set upper_day = snowplow_identities.upper_bound_day(this, anchor_relation, start_ts, backfill, atomic_event) -%}
     {%- do snowplow_identities.log_incremental_window(start_date, lookback, backfill, anchor_relation, atomic_event) -%}
   {%- else -%}
@@ -74,6 +74,11 @@ You may obtain a copy of the Snowplow Personal and Academic License Version 1.0 
     (select coalesce(max(cast(load_tstamp as date)), cast({{ start_ts }} as date)) from {{ relation }})
   {%- endset -%}
   {{ return(sql) }}
+{% endmacro %}
+
+{% macro lower_bound_day(relation, start_ts, lookback) %}
+  {%- set overlap = dbt.dateadd('day', 1 - lookback, snowplow_identities.watermark_day(relation, start_ts)) -%}
+  {{ return('greatest(cast(' ~ start_ts ~ ' as date), ' ~ overlap ~ ')') }}
 {% endmacro %}
 
 
@@ -166,7 +171,7 @@ You may obtain a copy of the Snowplow Personal and Academic License Version 1.0 
 
   {%- set query -%}
     select
-      cast({{ dbt.dateadd('day', 1 - lookback, wm_day) }} as {{ dbt.type_string() }}) as lower_bound,
+      cast({{ snowplow_identities.lower_bound_day(this, start_ts, lookback) }} as {{ dbt.type_string() }}) as lower_bound,
       cast({{ snowplow_identities.upper_bound_day(this, anchor_relation, start_ts, backfill, atomic_event) }} as {{ dbt.type_string() }}) as upper_bound,
       cast({{ wm_day }} as {{ dbt.type_string() }}) as watermark
   {%- endset -%}
