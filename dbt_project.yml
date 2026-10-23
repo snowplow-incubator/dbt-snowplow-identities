@@ -37,7 +37,7 @@ vars:
     snowplow__start_date: '2026-01-01' # The date from which to start processing events
     snowplow__hash_identifiers: false # Set to true to hash identifiers before processing (recommended for PII compliance)
     snowplow__identifiers: [{'reference': 'domain_userid', 'alias': 'domain_userid'}, {'reference': 'user_id', 'alias': 'user_id'}] # List of identifiers to process.
-    snowplow__backfill_limit_days: 30 # New days of data each model advances per run. A floor, not a cap: a model behind snowplow_identities_stg_identity_events extends its window to that model's watermark.
+    snowplow__backfill_limit_days: 30 # Days advanced per batch; extended to the upstream watermark or first eligible day after a gap.
     snowplow__lookback_days: 1 # Days of overlap re-scanned each run for late-arriving data. Also the run-twice idempotency window.
     # filter your data:
     snowplow__merge_limit_collapse: false # Marks the identity holding an identifier's most recent sighting as is_preferred when the identifier sits under several. Covers both a merge the service refused at its limit and an identifier that expired and came back under a new identity. ONLY safe when no identifier is configured as unique in the identity service.
@@ -60,6 +60,7 @@ vars:
 
 on-run-start:
   - "{{ snowplow_utils.license_check(var('snowplow__license_accepted')) }}"
+  - "{{ snowplow_identities.check_upgrade() }}"
 on-run-end:
   - "{{ snowplow_utils.grant_usage_on_schemas_built_into(var('snowplow__grant_schemas', true)) }}"
 flags:

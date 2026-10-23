@@ -118,7 +118,7 @@ jobs:
         run: ./.scripts/integration_test.sh -d ${{ matrix.warehouse }}
 
       - name: Check out published upgrade baseline
-        if: ${{ github.event_name == 'workflow_dispatch' && inputs.test_upgrade }}
+        if: ${{ github.event_name == 'pull_request' || inputs.test_upgrade }}
         uses: actions/checkout@v4
         with:
           ref: '0.1.0'
@@ -126,7 +126,7 @@ jobs:
           persist-credentials: false
 
       - name: Test upgrade from 0.1.0
-        if: ${{ github.event_name == 'workflow_dispatch' && inputs.test_upgrade }}
+        if: ${{ github.event_name == 'pull_request' || inputs.test_upgrade }}
         run: ./.scripts/upgrade_test.sh "${{ matrix.warehouse }}" "$GITHUB_WORKSPACE/.upgrade-baseline/integration_tests"
 
       # post_ci_cleanup sits in utils package

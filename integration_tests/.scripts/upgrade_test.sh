@@ -17,8 +17,14 @@ cd "$candidate_project"
 # Keep populated 0.1.0 tables in place. dbt must repartition the incremental
 # tables and convert identifier_mapping to a view during the initial full refresh.
 dbt run-operation check_upgrade_fixture --target "$warehouse"
+if dbt run --select package:snowplow_identities --target "$warehouse" > upgrade_guard.log 2>&1; then
+  echo 'An upgrade without full refresh unexpectedly succeeded'
+  exit 1
+fi
+grep -F 'Upgrading snowplow_identities from 0.1.0 requires a package-scoped --full-refresh' upgrade_guard.log
+dbt run-operation check_upgrade_fixture --target "$warehouse"
 dbt seed --full-refresh --target "$warehouse"
-dbt run --select snowplow_identities_events_stg --target "$warehouse"
+dbt run --select snowplow_identities_events_stg --full-refresh --target "$warehouse"
 dbt run --full-refresh --exclude snowplow_identities_events_stg --vars '{snowplow__backfill_limit_days: 4}' --target "$warehouse"
 dbt test --target "$warehouse"
 

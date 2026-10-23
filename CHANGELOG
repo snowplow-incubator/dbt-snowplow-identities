@@ -21,11 +21,11 @@ Changed
   `snowplow_identities_identifier_mapping_base` table, resolved to the current
   `active_snowplow_id` at read time. The resolved-identifier grain is retained; `id_type` is normalized to lowercase.
 - Each model tracks its own progress off its own `max(load_tstamp)` instead of a shared
-  manifest, retiring the manifest, the base layer, the `_this_run` scratch layer and every
-  run hook. 15 models become 5 plus a view, and every dependency is a real `ref()`.
-- Every model except `snowplow_identities_stg_identity_events` extends its window's upper
-  bound to that model's watermark when its own is behind, so a sparse event stream cannot
-  strand a model.
+  manifest, retiring the manifest, the base layer, the `_this_run` scratch layer and the
+  manifest-maintenance hooks. 15 models become 5 plus a view, and every dependency is a real `ref()`.
+- Derived models extend their windows through their upstream staging or merge log,
+  including on the initial build. Both atomic readers seek the first eligible day across
+  empty periods without consuming every remaining populated day.
 - `snowplow_identities_stg_identity_events` replaces whole days instead of matching every
   `event_id`. BigQuery uses `insert_overwrite` with `copy_partitions`, Snowflake uses
   `delete+insert` keyed on the load date. The window is day-aligned, so this is equivalent to
@@ -50,6 +50,10 @@ Added
   when no identifier is configured as unique in the identity service.
 
 Fixed
+- Delayed merges resolve through stored parents, and stored children follow a root that
+  merges again even if they have expired from the service's cumulative payload.
+- Empty initial or incremental source windows no longer stall identity or merge readers.
+- Reject upgrades from 0.1.0 before model execution when the required full refresh is absent.
 - Merges no longer rewrite, re-point or delete identifier rows.
   `snowplow_identities_identifier_mapping_base` is keyed on an immutable surrogate of
   (snowplow_id, id_type, id_value).

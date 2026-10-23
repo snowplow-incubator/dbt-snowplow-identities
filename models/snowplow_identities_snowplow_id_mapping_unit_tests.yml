@@ -31,8 +31,6 @@ unit_tests:
             cast('2025-12-18 10:02:00.000' as timestamp) as collector_tstamp,
             cast('2025-12-18 10:02:00.000' as timestamp) as derived_tstamp,
             cast('2025-12-18 11:00:00.000' as timestamp) as load_tstamp
-      - input: ref('snowplow_identities_stg_identity_events')
-        rows: []
     expect:
       rows:
         - {snowplow_id: 'sp_BBBB', active_snowplow_id: 'sp_AAAA', merged_at: '2025-12-18 10:02:00.000', merge_event_id: 'mev-001', triggering_event_id: 'evt-001', load_tstamp: '2025-12-18 11:00:00.000'}
@@ -70,8 +68,6 @@ unit_tests:
             cast('2025-12-18 12:00:00.000' as timestamp),
             cast('2025-12-18 12:00:00.000' as timestamp),
             cast('2025-12-18 13:00:00.000' as timestamp)
-      - input: ref('snowplow_identities_stg_identity_events')
-        rows: []
     expect:
       rows:
         - {snowplow_id: 'sp_AAAA', active_snowplow_id: 'sp_CCCC', merged_at: '2025-12-18 12:00:00.000', merge_event_id: 'mev-002', triggering_event_id: 'evt-002', load_tstamp: '2025-12-18 13:00:00.000'}
@@ -103,20 +99,14 @@ unit_tests:
       - input: this
         rows:
           - {snowplow_id: 'sp_BBBB', active_snowplow_id: 'sp_AAAA', merged_at: '2025-12-18 10:02:00.000', merge_event_id: 'mev-001', triggering_event_id: 'evt-001', load_tstamp: '2025-12-18 11:00:00.000', model_tstamp: '2025-12-18 11:05:00.000'}
-      - input: ref('snowplow_identities_stg_identity_events')
-        rows: []
     expect:
       rows:
         - {snowplow_id: 'sp_BBBB', active_snowplow_id: 'sp_CCCC', merged_at: '2025-12-19 14:00:00.000', merge_event_id: 'mev-002', triggering_event_id: 'evt-002', load_tstamp: '2025-12-19 15:00:00.000'}
 
   - name: test__snowplow_identities_snowplow_id_mapping__anchor_extends_window_past_gap
     description: >
-      Incremental, with the model's own watermark stranded well behind the merge it needs to
-      process. backfill_limit_days is 1, so its own watermark (2025-12-18) plus the backfill
-      reaches only 2025-12-20 and would exclude the merge that loaded on 2025-12-31. The
-      anchor's watermark is up at 2025-12-31, which is what pulls the upper bound far enough
-      forward to see it. Without the anchor term the model returns nothing here and, because
-      its watermark cannot advance out of an empty window, it never would again.
+      A sparse merge stream advances from its upstream merge log even when there are no
+      identity-context events. The merge log's watermark extends this model's window.
     model: snowplow_identities_snowplow_id_mapping
     overrides:
       macros:
@@ -144,3 +134,137 @@ unit_tests:
     expect:
       rows:
         - {snowplow_id: 'sp_BBBB', active_snowplow_id: 'sp_CCCC', merged_at: '2025-12-31 09:00:00.000', merge_event_id: 'mev-002', triggering_event_id: 'evt-002', load_tstamp: '2025-12-31 10:00:00.000'}
+
+  - name: test__snowplow_identities_snowplow_id_mapping__late_merge_keeps_current_root
+    description: A delayed cumulative payload cannot restore an obsolete parent; a newly observed child also resolves
+      through that parent.
+    model: snowplow_identities_snowplow_id_mapping
+    overrides:
+      macros:
+        is_incremental: true
+      vars:
+        snowplow__start_date: '2020-01-02'
+        snowplow__backfill_limit_days: 1
+    given:
+    - input: ref('snowplow_identities_merge_events')
+      format: sql
+      rows: |-
+        select 'root_change' as merge_event_id, 'root' as active_snowplow_id,
+        {% if target.type == 'bigquery' %}[struct(cast(null as timestamp) as created_at, timestamp '2020-01-18 10:00:00' as merged_at, 'child' as snowplow_id, 'trigger_child' as triggering_event_id), struct(cast(null as timestamp) as created_at, timestamp '2020-01-20 10:00:00' as merged_at, 'old_parent' as snowplow_id, 'trigger_old_parent' as triggering_event_id)]
+        {% elif target.type in ['databricks', 'spark'] %}from_json('[{"snowplow_id":"child","merged_at":"2020-01-18 10:00:00","triggering_event_id":"trigger_child"},{"snowplow_id":"old_parent","merged_at":"2020-01-20 10:00:00","triggering_event_id":"trigger_old_parent"}]', 'array<struct<snowplow_id:string,created_at:timestamp,merged_at:timestamp,triggering_event_id:string>>')
+        {% else %}parse_json('[{"snowplow_id":"child","merged_at":"2020-01-18 10:00:00","triggering_event_id":"trigger_child"},{"snowplow_id":"old_parent","merged_at":"2020-01-20 10:00:00","triggering_event_id":"trigger_old_parent"}]'){% endif %} as merged,
+        cast('2020-01-20 12:00:00' as timestamp) as load_tstamp
+        union all
+        select 'delayed' as merge_event_id, 'old_parent' as active_snowplow_id,
+        {% if target.type == 'bigquery' %}[struct(cast(null as timestamp) as created_at, timestamp '2020-01-18 10:00:00' as merged_at, 'child' as snowplow_id, 'trigger_child' as triggering_event_id), struct(cast(null as timestamp) as created_at, timestamp '2020-01-18 10:00:00' as merged_at, 'new_child' as snowplow_id, 'trigger_new_child' as triggering_event_id)]
+        {% elif target.type in ['databricks', 'spark'] %}from_json('[{"snowplow_id":"child","merged_at":"2020-01-18 10:00:00","triggering_event_id":"trigger_child"},{"snowplow_id":"new_child","merged_at":"2020-01-18 10:00:00","triggering_event_id":"trigger_new_child"}]', 'array<struct<snowplow_id:string,created_at:timestamp,merged_at:timestamp,triggering_event_id:string>>')
+        {% else %}parse_json('[{"snowplow_id":"child","merged_at":"2020-01-18 10:00:00","triggering_event_id":"trigger_child"},{"snowplow_id":"new_child","merged_at":"2020-01-18 10:00:00","triggering_event_id":"trigger_new_child"}]'){% endif %} as merged,
+        cast('2020-01-23 12:00:00' as timestamp) as load_tstamp
+    - input: this
+      rows: &id001
+      - snowplow_id: child
+        active_snowplow_id: root
+        merged_at: '2020-01-18 10:00:00'
+        merge_event_id: stored_child
+        triggering_event_id: trigger_child
+        load_tstamp: '2020-01-20 12:00:00'
+        model_tstamp: '2020-01-20 12:00:00'
+      - snowplow_id: old_parent
+        active_snowplow_id: root
+        merged_at: '2020-01-20 10:00:00'
+        merge_event_id: stored_old_parent
+        triggering_event_id: trigger_old_parent
+        load_tstamp: '2020-01-20 12:00:00'
+        model_tstamp: '2020-01-20 12:00:00'
+      - snowplow_id: unrelated
+        active_snowplow_id: other
+        merged_at: '2020-01-18 10:00:00'
+        merge_event_id: stored_unrelated
+        triggering_event_id: trigger_unrelated
+        load_tstamp: '2020-01-22 12:00:00'
+        model_tstamp: '2020-01-22 12:00:00'
+    expect:
+      rows:
+      - snowplow_id: child
+        active_snowplow_id: root
+        load_tstamp: '2020-01-23 12:00:00'
+      - snowplow_id: new_child
+        active_snowplow_id: root
+        load_tstamp: '2020-01-23 12:00:00'
+  - name: test__snowplow_identities_snowplow_id_mapping__late_merge_and_new_root
+    description: A delayed old parent and a new root in the same batch also move stored children omitted from the
+      new cumulative payload.
+    model: snowplow_identities_snowplow_id_mapping
+    overrides:
+      macros:
+        is_incremental: true
+      vars:
+        snowplow__start_date: '2020-01-02'
+        snowplow__backfill_limit_days: 1
+    given:
+    - input: ref('snowplow_identities_merge_events')
+      format: sql
+      rows: |-
+        select 'delayed' as merge_event_id, 'old_parent' as active_snowplow_id,
+        {% if target.type == 'bigquery' %}[struct(cast(null as timestamp) as created_at, timestamp '2020-01-18 10:00:00' as merged_at, 'child' as snowplow_id, 'trigger_child' as triggering_event_id), struct(cast(null as timestamp) as created_at, timestamp '2020-01-18 10:00:00' as merged_at, 'new_child' as snowplow_id, 'trigger_new_child' as triggering_event_id)]
+        {% elif target.type in ['databricks', 'spark'] %}from_json('[{"snowplow_id":"child","merged_at":"2020-01-18 10:00:00","triggering_event_id":"trigger_child"},{"snowplow_id":"new_child","merged_at":"2020-01-18 10:00:00","triggering_event_id":"trigger_new_child"}]', 'array<struct<snowplow_id:string,created_at:timestamp,merged_at:timestamp,triggering_event_id:string>>')
+        {% else %}parse_json('[{"snowplow_id":"child","merged_at":"2020-01-18 10:00:00","triggering_event_id":"trigger_child"},{"snowplow_id":"new_child","merged_at":"2020-01-18 10:00:00","triggering_event_id":"trigger_new_child"}]'){% endif %} as merged,
+        cast('2020-01-23 12:00:00' as timestamp) as load_tstamp
+        union all
+        select 'next_root' as merge_event_id, 'new_root' as active_snowplow_id,
+        {% if target.type == 'bigquery' %}[struct(cast(null as timestamp) as created_at, timestamp '2020-01-24 10:00:00' as merged_at, 'root' as snowplow_id, 'trigger_root' as triggering_event_id)]
+        {% elif target.type in ['databricks', 'spark'] %}from_json('[{"snowplow_id":"root","merged_at":"2020-01-24 10:00:00","triggering_event_id":"trigger_root"}]', 'array<struct<snowplow_id:string,created_at:timestamp,merged_at:timestamp,triggering_event_id:string>>')
+        {% else %}parse_json('[{"snowplow_id":"root","merged_at":"2020-01-24 10:00:00","triggering_event_id":"trigger_root"}]'){% endif %} as merged,
+        cast('2020-01-24 12:00:00' as timestamp) as load_tstamp
+    - input: this
+      rows: *id001
+    expect:
+      rows:
+      - snowplow_id: child
+        active_snowplow_id: new_root
+        load_tstamp: '2020-01-24 12:00:00'
+      - snowplow_id: new_child
+        active_snowplow_id: new_root
+        load_tstamp: '2020-01-24 12:00:00'
+      - snowplow_id: old_parent
+        active_snowplow_id: new_root
+        load_tstamp: '2020-01-24 12:00:00'
+      - snowplow_id: root
+        active_snowplow_id: new_root
+        load_tstamp: '2020-01-24 12:00:00'
+  - name: test__snowplow_identities_snowplow_id_mapping__repeat_is_noop
+    description: Replaying a delayed payload preserves the current root and emits no updates.
+    model: snowplow_identities_snowplow_id_mapping
+    overrides:
+      macros:
+        is_incremental: true
+      vars:
+        snowplow__start_date: '2020-01-02'
+        snowplow__backfill_limit_days: 1
+    given:
+    - input: ref('snowplow_identities_merge_events')
+      format: sql
+      rows: |-
+        select 'delayed' as merge_event_id, 'old_parent' as active_snowplow_id,
+        {% if target.type == 'bigquery' %}[struct(cast(null as timestamp) as created_at, timestamp '2020-01-18 10:00:00' as merged_at, 'child' as snowplow_id, 'trigger_child' as triggering_event_id)]
+        {% elif target.type in ['databricks', 'spark'] %}from_json('[{"snowplow_id":"child","merged_at":"2020-01-18 10:00:00","triggering_event_id":"trigger_child"}]', 'array<struct<snowplow_id:string,created_at:timestamp,merged_at:timestamp,triggering_event_id:string>>')
+        {% else %}parse_json('[{"snowplow_id":"child","merged_at":"2020-01-18 10:00:00","triggering_event_id":"trigger_child"}]'){% endif %} as merged,
+        cast('2020-01-23 12:00:00' as timestamp) as load_tstamp
+    - input: this
+      rows:
+      - snowplow_id: child
+        active_snowplow_id: root
+        merged_at: '2020-01-18 10:00:00'
+        merge_event_id: stored_child
+        triggering_event_id: trigger_child
+        load_tstamp: '2020-01-23 12:00:00'
+        model_tstamp: '2020-01-23 12:00:00'
+      - snowplow_id: old_parent
+        active_snowplow_id: root
+        merged_at: '2020-01-20 10:00:00'
+        merge_event_id: stored_old_parent
+        triggering_event_id: trigger_old_parent
+        load_tstamp: '2020-01-23 12:00:00'
+        model_tstamp: '2020-01-23 12:00:00'
+    expect:
+      rows: []

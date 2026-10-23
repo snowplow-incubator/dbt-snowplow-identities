@@ -35,7 +35,8 @@ The shared manifest table and the hooks that maintained it are gone. Each model 
 own table for the newest `load_tstamp` it holds and processes forward from there, so a
 failed run leaves that model slightly behind and it catches up on the next one. This
 deletes the manifest, three supporting models, the whole `_this_run` scratch layer, and
-every run hook. 15 models become 5 plus a view.
+the manifest-maintenance hooks. 15 models become 5 plus a view. A read-only startup
+check rejects an upgrade that is missing the required full refresh.
 
 Config that no longer exists: `snowplow__allow_refresh`, `snowplow__dev_target_name`,
 and the `models_to_remove` var (all belonged to the manifest). A `--full-refresh` now
@@ -85,8 +86,8 @@ to drop them after validation.
    ```
 
    If more history remains, run again **without** `--full-refresh` to advance. Repeating
-   the full-refresh flag restarts from the beginning. Keep the first window large enough
-   to reach actual identity-context events; an empty staging window cannot advance itself.
+   the full-refresh flag restarts from the beginning. Empty periods are skipped to the
+   first eligible day, so the start date may precede the first identity event.
 
    ```bash
    dbt run --select package:snowplow_identities --vars '{snowplow__backfill_limit_days: 400}'
@@ -126,42 +127,40 @@ to drop them after validation.
    The initial full refresh replaces `identifier_mapping` with the view, so it does
    not need a separate manual drop.
 
-### Sparse event streams no longer stall a model
+### Sparse streams and delayed merges
 
-A model's window can only advance if it finds data in it. Left alone, a gap between events
-longer than `snowplow__backfill_limit_days` would strand a model. The window comes back empty,
-the watermark does not move, and the next run recomputes the same window. This mattered most
-for `merge_events` and `snowplow_id_mapping`, which advance off `identity_merge` events only.
-Those are far sparser than identity events, and often more than a day apart.
+Both atomic readers look for the first eligible day after their current watermark.
+If a gap extends past the normal window, its upper bound extends through that first
+populated day. It does not jump to the newest source timestamp and process all remaining
+history at once. The lookup applies the same application and identity-context filters
+as the reader. It also works when the existing table is empty or on the initial build.
 
-This design assumes identity context events are frequent enough for
-`snowplow_identities_stg_identity_events` to advance within its backfill window. Every other model uses its watermark as an anchor:
+Derived models extend their windows through their upstream data: identities and identifier
+rows follow identity staging; the child-to-root mapping follows the merge log. A merge-only
+period therefore does not depend on new identity-context events. Lower bounds retain each
+model's own watermark and configured lookback, so a failed downstream model catches up.
 
-- The lower bound is always the model's own watermark, so a model that errors re-scans its
-  last window rather than skipping it. The manifest gave you that by taking the minimum across
-  models.
-- The upper bound is whichever is further ahead, its own watermark plus
-  `snowplow__backfill_limit_days`, or the anchor's watermark. A merge landing anywhere after
-  the model's watermark is inside the window.
+The source-day lookup reads eligible source timestamps beyond the current batch. That
+adds source-read work, particularly during a sparse historical backfill; the backfill
+setting limits populated days processed, not a guarantee on bytes scanned. Benchmark
+warehouse usage on representative data before switching production consumers.
 
-Two things follow. `snowplow__backfill_limit_days` becomes a floor rather than a cap for a
-model sitting behind the anchor, though it still paces the anchor itself, so backfills stay
-throttled. And between merges `merge_events` scans a widening range, from your last merge up
-to where staging has reached. That scan is pruned on `load_tstamp` and `event_name`, which
-`atomic.events` is usually partitioned or clustered on, and it collapses as soon as a merge
-lands.
+A delayed merge is resolved against the stored child-to-root mapping before applying
+new edges. Stored children also follow a root that merges again, including children no
+longer present in the service's cumulative payload. Repeating an unchanged batch does
+not rewrite the mapping rows. These rules rely on the identity service's cumulative,
+acyclic merge semantics; the package's no-chain and stale-root tests remain required.
 
-The anchor itself cannot advance through an empty window. This affects both an initial
-start date before the data begins and later gaps longer than the backfill window. If
-`snowplow__start_date` is well before your data begins, the
-anchor's own first window is empty and it stalls too. The manifest framework did the same, so
-this is not new, but set `snowplow__start_date` near the start of your data.
+`load_tstamp` must describe warehouse arrival. Rows inserted with an old `load_tstamp`
+outside the configured lookback are not automatically rediscovered. Increase the lookback
+or rebuild the affected period after such a backdated reload. Partition-buffer settings
+must also cover the actual difference between the partition timestamp and `load_tstamp`.
 
 ### Run-window logging
 
-Every model logs its watermark and the window it is about to process, replacing the old
-`print_run_limits` output. In normal operation all five models report the same window; during
-a backfill, or where one model is catching up behind the anchor, they legitimately differ.
+Incremental models log their watermark and resolved processing window. Windows can differ
+between identity and merge streams. Initial-build logging reports the requested starting
+window; source gaps or an upstream anchor can extend its upper bound.
 
 ---
 
@@ -234,176 +233,36 @@ arbitrarily, which is the lossiness that motivated removing these columns. Join
 
 ## Rebuilding id_changes
 
-An append-only log of every identity creation and merge. Column names below match the
-removed table exactly, so a drop-in replacement only needs the `ref()` updated.
+The removed history table has no drop-in replacement in 0.2.0. Keep the saved 0.1.0
+history if downstream users depend on it. The merge log retains cumulative payloads,
+but those payloads preserve a child's original `merged_at` when a group changes root;
+they do not reproduce every timestamp and processing decision of the removed model.
 
-`effective_at` is event time (when the change happened); `changed_at` is processing
-time (when dbt saw it).
-
-```sql
--- models/my_id_changes.sql
-{{ config(
-    materialized='incremental',
-    unique_key='id_change_key',
-    on_schema_change='append_new_columns'
-) }}
-
-with created as (
-    select
-        snowplow_id,
-        cast(null as {{ dbt.type_string() }}) as previous_snowplow_id,
-        first_derived_tstamp as effective_at,
-        'created' as change_type,
-        first_seen_event_id,
-        first_app_id as first_seen_app_id
-    from {{ ref('snowplow_identities_identities') }}
-    {% if is_incremental() %}
-      where first_derived_tstamp > (
-          select coalesce(max(effective_at), '1970-01-01')
-          from {{ this }} where change_type = 'created'
-      )
-    {% endif %}
-),
-
--- One row per (parent, child) edge in every merge event. Snowflake syntax; on
--- BigQuery use `from ... as p, unnest(p.merged) as m` and drop the `:field::type`
--- casts. Keep the flatten in its own CTE: combining a lateral flatten and a join in
--- one FROM clause makes Snowflake fail with an internal optimizer error.
-merged_flat as (
-    select
-        p.active_snowplow_id,
-        m.value:snowplow_id::{{ dbt.type_string() }} as previous_snowplow_id,
-        m.value:merged_at::{{ dbt.type_timestamp() }} as effective_at,
-        m.value:triggering_event_id::{{ dbt.type_string() }} as first_seen_event_id
-    from {{ ref('snowplow_identities_merge_events') }} as p,
-        table(flatten(input => p.merged)) as m
-),
-
--- Merge events carry the full cumulative list of merged ids, so the same edge
--- reappears in every later merge event for its group. Keep the earliest sighting of
--- each edge -- that is when the change actually happened. This scans the whole merge
--- log rather than just the new batch, deliberately: the earliest sighting can only be
--- found globally, and computing it globally makes the result identical on every run,
--- so the incremental merge below is a no-op for edges already stored. The merge log
--- is small relative to atomic.events, so the full scan is cheap.
-merged as (
-    select
-        f.active_snowplow_id as snowplow_id,
-        f.previous_snowplow_id,
-        f.effective_at,
-        'merged' as change_type,
-        f.first_seen_event_id,
-        i.first_app_id as first_seen_app_id
-    from merged_flat f
-    left join {{ ref('snowplow_identities_identities') }} i
-        on f.previous_snowplow_id = i.snowplow_id
-    qualify row_number() over (
-        partition by f.active_snowplow_id, f.previous_snowplow_id
-        order by f.effective_at asc
-    ) = 1
-),
-
-combined as (
-    select * from created
-    union all
-    select * from merged
-)
-
-select
-    {{ dbt_utils.generate_surrogate_key(['snowplow_id', 'previous_snowplow_id']) }} as id_change_key,
-    snowplow_id,
-    previous_snowplow_id,
-    effective_at,
-    {{ snowplow_utils.current_timestamp_in_utc() }} as changed_at,
-    change_type,
-    first_seen_event_id,
-    first_seen_app_id
-from combined
-```
-
-A child legitimately appears under more than one parent when merges cascade, first under an
-intermediate and later under the final root. Both edges are real changes, so both get a row.
-That is what makes this a change log rather than a current-state mapping. For current state,
-use `snowplow_id_mapping`.
-
-### Verified against the removed model
-
-Run against the package's integration fixtures, this recipe produces the same 150 rows as
-the deleted table, with the same `snowplow_id`, `previous_snowplow_id`, `change_type`,
-`first_seen_event_id` and `first_seen_app_id`. Without the `qualify`, the cumulative arrays
-inflate `merged` from 63 rows to 104.
-
-One known difference. On 9 of the 63 `merged` rows, all of them cascading merges,
-`effective_at` differs. This recipe uses the engine's own `merged_at`, so a child re-rooted by
-a later merge keeps the timestamp of when it was first merged. The removed model stamped it
-with the time of the later merge instead, using an internal snapshot table that no longer
-exists. They answer different questions, "when was this child merged" against "when did it
-start pointing at this root". If you need the second reading, `snowplow_id_mapping` already
-has current state, and reproducing the history exactly means tracking root changes run over
-run.
-
----
+For history from the cutover onwards, capture changes to the resolved mapping in a
+consumer-owned snapshot or history model. Define whether validity means service event
+time or warehouse processing time, and validate late arrivals and cascading merges
+against that contract before migrating those consumers.
 
 ## Rebuilding id_mapping_scd
 
-A Type 2 history answering "which identity did this id belong to as of *then*". Build it
-on top of `my_id_changes` above.
+Retain the 0.1.0 SCD table for historical point-in-time queries. A new snapshot of current
+mapping state can record changes from the cutover onwards, but cannot recover previously
+unobserved transitions or reproduce the old SCD history from current mappings alone.
+Do not drop these old outputs until their consumers have an independently validated
+replacement. If exact historical compatibility is required, remain on 0.1.0 while that
+migration is designed.
 
-```sql
--- models/my_id_mapping_scd.sql
-{{ config(materialized='table') }}
+## Validation and rollback
 
-with changes as (
-    select
-        -- the id being tracked: the child for merges, the new id for creates
-        case when change_type = 'merged' then previous_snowplow_id else snowplow_id end as snowplow_id,
-        snowplow_id as active_snowplow_id,
-        effective_at,
-        changed_at,
-        change_type,
-        first_seen_event_id,
-        first_seen_app_id
-    from {{ ref('my_id_changes') }}
-),
+Prefer rebuilding into a separate output target/schema while keeping the atomic source
+configuration unchanged. Finish the backfill and run `dbt test --select package:snowplow_identities`
+before switching consumers. Check identity counts, resolved owners, earliest/latest source
+coverage, case-sensitive `id_type` filters and the opt-in preferred-owner behaviour. UUIDs
+are derived from `id_type`, so normalizing its case can change keys used downstream.
 
--- Keep the earliest record per (snowplow_id, active_snowplow_id) so re-emitted
--- cumulative merges do not create duplicate validity periods.
-deduped as (
-    select *
-    from changes
-    qualify row_number() over (
-        partition by snowplow_id, active_snowplow_id
-        order by effective_at asc
-    ) = 1
-)
-
-select
-    {{ dbt_utils.generate_surrogate_key(['snowplow_id', 'effective_at', 'change_type']) }} as scd_key,
-    snowplow_id,
-    active_snowplow_id,
-    effective_at,
-    lead(effective_at) over (partition by snowplow_id order by effective_at asc) as superseded_at,
-    changed_at,
-    change_type,
-    first_seen_event_id,
-    first_seen_app_id,
-    lead(effective_at) over (partition by snowplow_id order by effective_at asc) is null as is_current
-from deduped
-```
-
-Point-in-time query:
-
-```sql
-select s.snowplow_id, scd.active_snowplow_id
-from sessions s
-join my_id_mapping_scd scd
-    on s.snowplow_id = scd.snowplow_id
-where scd.effective_at <= :as_of_timestamp
-    and (scd.superseded_at is null or scd.superseded_at > :as_of_timestamp)
-```
-
-Materialized as a table rather than incrementally, because `superseded_at` and
-`is_current` on existing rows change when a new merge arrives. If that gets expensive,
-make it incremental on `scd_key` and restrict `changes` to `snowplow_id`s touched in the
-current batch. That is what the removed model did, and it was the most complex model in the
-package.
+Keep the prior package lockfile and a consistent backup of all 0.1.0 output schemas,
+including manifest and history tables. If validation fails, leave consumers on the old
+schemas. After an in-place upgrade, rollback requires restoring those backups and pinning
+0.1.0 again; changing the package version alone cannot undo the table-to-view conversion
+or restore the removed history. Rehearse that restore using your warehouse's backup or
+clone mechanism before upgrading in place.
