@@ -35,7 +35,7 @@ def wrapped(macro):
     return call
 
 
-def real_context(incremental, variables):
+def real_context(incremental, variables, **overrides):
     env, context = render_context(incremental=incremental, variables=variables)
     context.update({
         'return': macro_return,
@@ -45,6 +45,7 @@ def real_context(incremental, variables):
         'exceptions': SimpleNamespace(raise_compiler_error=lambda message: (_ for _ in ()).throw(ValueError(message))),
     })
     context['snowplow_utils'].app_id_filter = lambda apps: 'true' if not apps else "app_id in (" + ','.join("'" + a.replace("'", "''") + "'" for a in apps) + ')'
+    context.update(overrides)
     for path in (ROOT / 'macros').rglob('*.sql'):
         module = env.from_string(path.read_text()).make_module(context)
         for name in dir(module):
@@ -52,6 +53,52 @@ def real_context(incremental, variables):
             if isinstance(macro, jinja2.runtime.Macro):
                 setattr(context['snowplow_identities'], name, wrapped(macro))
     return env, context
+
+
+@pytest.mark.parametrize('next_event_day, upper_day', [
+    ('2026-01-02', '2026-01-03'),
+    ('2026-03-10', '2026-03-11'),
+])
+def test_incremental_bounds_are_resolved_once_for_predicate_and_log(next_event_day, upper_day):
+    class Relation(str):
+        identifier = 'historical'
+
+    with duckdb.connect() as connection:
+        connection.execute("set timezone = 'UTC'")
+        connection.execute("create table historical as select timestamp '2026-01-01' as load_tstamp")
+        connection.execute(f"""
+            create table atomic_events as
+            select timestamp '{next_event_day}' as load_tstamp, 'identity_merge' as event_name
+        """)
+        queries, messages = [], []
+
+        def run_query(query):
+            queries.append(query)
+            return SimpleNamespace(rows=connection.execute(duck_sql(query)).fetchall())
+
+        _, context = real_context(True, {
+            'snowplow__start_date': '2026-01-01',
+            'snowplow__backfill_limit_days': 1,
+        }, flags=SimpleNamespace(WHICH='run'), this=Relation('historical'), run_query=run_query)
+        context['snowplow_utils'].log_message = messages.append
+        predicate = context['snowplow_identities'].get_incremental_filter(anchor=False, atomic_event='merge')
+
+        # One bounded probe plus one date-resolution query, including the gap seek
+        # when needed. Logging must not issue a second bounded atomic probe.
+        assert len(queries) == 2
+        assert messages == [
+            f'Snowplow: historical at watermark 2026-01-01 -- processing load_tstamp from 2026-01-01 to {upper_day}'
+        ]
+        # The model reuses the dates already logged, even if its source advances
+        # between compilation and execution; no second atomic lookup is embedded.
+        connection.execute('drop table atomic_events')
+        rows = connection.execute(duck_sql(f"""
+            select cast(load_tstamp as date) from (values
+                (timestamp '2025-12-31'), (timestamp '2026-01-01'),
+                (timestamp '{next_event_day}'), (timestamp '{upper_day}')
+            ) events(load_tstamp) where {predicate}
+        """)).fetchall()
+        assert rows == [(datetime.date(2026, 1, 1),), (datetime.date.fromisoformat(next_event_day),)]
 
 
 CASES = []

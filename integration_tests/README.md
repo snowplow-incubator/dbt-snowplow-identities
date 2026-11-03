@@ -43,7 +43,9 @@ PR checks include upgrade validation; manual runs can request it with `test_upgr
 After the normal suite,
 it builds the published 0.1.0 package in another isolated schema, applies the
 full refresh documented in MIGRATION.md to the populated 0.1.0 tables. Before that,
-it verifies an ordinary incremental upgrade is rejected and retains the old tables.
+it verifies an ordinary incremental upgrade and a partial full refresh are rejected
+without changing the old tables. A source-stage-only run remains allowed while those
+legacy tables exist, exercising selection-aware startup checks.
 It checks table-to-view conversion and compares the upgraded outputs with the same
 expected fixtures, including another incremental run for idempotency. Workflow
 cleanup removes both sets of test schemas.

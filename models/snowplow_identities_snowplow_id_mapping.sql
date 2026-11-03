@@ -67,9 +67,12 @@ all_direct_mappings as (
 ),
 
 true_parents as (
-    select distinct active_snowplow_id
-    from all_direct_mappings
-    where active_snowplow_id not in (select snowplow_id from all_direct_mappings)
+    select distinct n.active_snowplow_id
+    from all_direct_mappings n
+    where not exists (
+        select 1 from all_direct_mappings child
+        where child.snowplow_id = n.active_snowplow_id
+    )
 ),
 
 root_mappings as (
@@ -86,6 +89,9 @@ root_mappings as (
 resolved as (
     -- Also move stored children when their old root merges in this batch. They
     -- may have expired out of the service's cumulative array in the meantime.
+    -- This is a one-hop fallback: if several intermediate parents were pruned
+    -- from the cumulative payload in the same window, historical children can
+    -- remain chained. The no-chain test detects this limitation; see MIGRATION.md.
     select
         n.snowplow_id,
         coalesce(p.active_snowplow_id, n.active_snowplow_id) as active_snowplow_id,
@@ -120,9 +126,13 @@ select
 from deduplicated n
 {% if is_incremental() %}
 left join {{ this }} t on n.snowplow_id = t.snowplow_id
+{% endif %}
+-- A malformed child must not suppress valid mappings or create a NULL key.
+where n.snowplow_id is not null
+{% if is_incremental() %}
 -- Retain untouched rows without rewriting the entire mapping on each run.
-where t.snowplow_id is null
+and (t.snowplow_id is null
    or n.active_snowplow_id != t.active_snowplow_id
    or n.merged_at != t.merged_at
-   or n.load_tstamp > t.load_tstamp
+   or n.load_tstamp > t.load_tstamp)
 {% endif %}

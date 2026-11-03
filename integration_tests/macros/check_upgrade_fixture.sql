@@ -19,5 +19,9 @@
     {% if old is none %}
       {{ exceptions.raise_compiler_error('Missing 0.1.0 upgrade fixture: ' ~ model) }}
     {% endif %}
+    {% set columns = adapter.get_columns_in_relation(old) | map(attribute='name') | map('lower') | list %}
+    {% if 'load_tstamp' in columns %}
+      {{ exceptions.raise_compiler_error('The 0.1.0 fixture was changed before the coordinated upgrade: ' ~ model) }}
+    {% endif %}
   {% endfor %}
 {% endmacro %}

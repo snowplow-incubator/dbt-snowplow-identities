@@ -10,6 +10,28 @@ version: 2
 
 unit_tests:
 
+  - name: test__snowplow_identities_snowplow_id_mapping__null_child_preserves_valid_mappings
+    description: A malformed null child in a merge payload must not suppress valid mappings or create a null key.
+    model: snowplow_identities_snowplow_id_mapping
+    overrides:
+      macros:
+        is_incremental: false
+      vars:
+        snowplow__start_date: '2025-12-01'
+        snowplow__backfill_limit_days: 90
+    given:
+      - input: ref('snowplow_identities_merge_events')
+        format: sql
+        rows: |
+          select 'mev-null-child' as merge_event_id, 'sp_AAAA' as active_snowplow_id,
+          {% if target.type == 'bigquery' %}[struct(cast(null as timestamp) as created_at, timestamp '2025-12-18 10:02:00' as merged_at, 'sp_BBBB' as snowplow_id, 'evt-001' as triggering_event_id), struct(cast(null as timestamp) as created_at, timestamp '2025-12-18 10:02:00' as merged_at, cast(null as string) as snowplow_id, 'evt-null' as triggering_event_id)]
+          {% elif target.type in ['databricks', 'spark'] %}from_json('[{"snowplow_id":"sp_BBBB","merged_at":"2025-12-18 10:02:00","triggering_event_id":"evt-001"},{"snowplow_id":null,"merged_at":"2025-12-18 10:02:00","triggering_event_id":"evt-null"}]', 'array<struct<snowplow_id:string,created_at:timestamp,merged_at:timestamp,triggering_event_id:string>>')
+          {% else %}parse_json('[{"snowplow_id":"sp_BBBB","merged_at":"2025-12-18 10:02:00","triggering_event_id":"evt-001"},{"snowplow_id":null,"merged_at":"2025-12-18 10:02:00","triggering_event_id":"evt-null"}]'){% endif %} as merged,
+          cast('2025-12-18 11:00:00' as timestamp) as load_tstamp
+    expect:
+      rows:
+        - {snowplow_id: 'sp_BBBB', active_snowplow_id: 'sp_AAAA', merged_at: '2025-12-18 10:02:00', merge_event_id: 'mev-null-child', triggering_event_id: 'evt-001', load_tstamp: '2025-12-18 11:00:00'}
+
   - name: test__snowplow_identities_snowplow_id_mapping__first_run
     description: >
       First run: sp_BBBB is merged into sp_AAAA. The table should contain the mapping.

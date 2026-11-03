@@ -48,7 +48,8 @@ You may obtain a copy of the Snowplow Personal and Academic License Version 1.0 
   {%- if is_incremental() -%}
     {%- set lower_day = snowplow_identities.lower_bound_day(this, start_ts, lookback) -%}
     {%- set upper_day = snowplow_identities.upper_bound_day(this, anchor_relation, start_ts, backfill, atomic_event) -%}
-    {%- do snowplow_identities.log_incremental_window(start_date, lookback, backfill, anchor_relation, atomic_event) -%}
+    {%- set bounds = snowplow_identities.resolve_incremental_window(lower_day, upper_day, start_ts) -%}
+    {%- set lower_day, upper_day = bounds -%}
   {%- else -%}
     {%- set lower_day = "cast(" ~ start_ts ~ " as date)" -%}
     {%- set upper_day = dbt.dateadd('day', backfill, "cast(" ~ start_ts ~ " as date)") -%}
@@ -155,25 +156,24 @@ You may obtain a copy of the Snowplow Personal and Academic License Version 1.0 
 
 
 {#
-  Log the window a model is about to process, replacing the manifest framework's
-  print_run_limits. Bounds in the predicate are subqueries, so this resolves the real dates
-  with one query. Restricted to `dbt run` / `dbt build`: during unit tests is_incremental() is
-  overridden while {{ this }} may not exist.
+  Resolve this model's bounds once and reuse them for logging and the predicate.
+  In particular, an empty forward window must not repeat the atomic gap lookup just
+  to print its bounds. Restricted to `dbt run` / `dbt build`: during unit tests
+  is_incremental() is overridden while {{ this }} may not exist.
 #}
 
-{% macro log_incremental_window(start_date, lookback, backfill, anchor_relation=none, atomic_event=none) %}
-  {%- if not execute -%}{{ return('') }}{%- endif -%}
+{% macro resolve_incremental_window(lower_day, upper_day, start_ts) %}
+  {%- if not execute -%}{{ return([lower_day, upper_day]) }}{%- endif -%}
   {%- set which = flags.WHICH | default('', true) -%}
-  {%- if which not in ['run', 'build'] -%}{{ return('') }}{%- endif -%}
+  {%- if which not in ['run', 'build'] -%}{{ return([lower_day, upper_day]) }}{%- endif -%}
 
-  {%- set start_ts = "cast('" ~ start_date ~ "' as timestamp)" -%}
   {%- set wm_day = snowplow_identities.watermark_day(this, start_ts) -%}
 
   {%- set query -%}
     select
-      cast({{ snowplow_identities.lower_bound_day(this, start_ts, lookback) }} as {{ dbt.type_string() }}) as lower_bound,
-      cast({{ snowplow_identities.upper_bound_day(this, anchor_relation, start_ts, backfill, atomic_event) }} as {{ dbt.type_string() }}) as upper_bound,
-      cast({{ wm_day }} as {{ dbt.type_string() }}) as watermark
+      cast({{ lower_day }} as date) as lower_bound,
+      cast({{ upper_day }} as date) as upper_bound,
+      cast({{ wm_day }} as date) as watermark
   {%- endset -%}
 
   {%- set results = run_query(query) -%}
@@ -183,7 +183,9 @@ You may obtain a copy of the Snowplow Personal and Academic License Version 1.0 
       "Snowplow: " ~ this.identifier ~ " at watermark " ~ row[2]
       ~ " -- processing load_tstamp from " ~ row[0] ~ " to " ~ row[1]
     ) }}
+    {{ return(["cast('" ~ row[0] ~ "' as date)", "cast('" ~ row[1] ~ "' as date)"]) }}
   {%- endif -%}
+  {{ return([lower_day, upper_day]) }}
 {% endmacro %}
 
 

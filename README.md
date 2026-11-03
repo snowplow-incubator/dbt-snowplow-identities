@@ -34,6 +34,9 @@ The easiest way to get started is to follow our [QuickStart guide](https://docs.
 Upgrading from 0.1.0 is a breaking change. See [MIGRATION.md](MIGRATION.md) for the steps and
 for recipes rebuilding the tables this release removes.
 
+The migration guide also documents the [pruned-chain limitation](MIGRATION.md#sparse-streams-and-delayed-merges)
+and [performance checks for large identity graphs](MIGRATION.md#benchmark-before-a-large-rollout).
+
 ### Adapter support
 
 BigQuery, Snowflake and Databricks.
