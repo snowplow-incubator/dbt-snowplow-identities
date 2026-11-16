@@ -99,8 +99,8 @@ unpivoted as (
 -- ones", so whether any event escaped the degraded reasons is recorded separately. An
 -- event with no reasons at all is healthy (reason_contains treats null as absent).
 {%- set is_healthy_sighting -%}
-not ({{ snowplow_identities.reason_contains('decision_reasons', 'degraded_registry_only') }}
-    or {{ snowplow_identities.reason_contains('decision_reasons', 'degraded_deterministic') }})
+not ({{ snowplow_identities.reason_contains('decision_reasons', 'degraded_provisional') }}
+    or {{ snowplow_identities.reason_contains('decision_reasons', 'degraded_fallback') }})
 {%- endset %}
 reasons as (
     select

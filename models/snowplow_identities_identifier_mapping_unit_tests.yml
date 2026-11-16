@@ -416,7 +416,7 @@ unit_tests:
       - input: ref('snowplow_identities_identifier_mapping_base')
         rows:
           - {id_key: 'k_flagged', snowplow_id: 'sp_FLAGGED', id_type: 'domain_userid', id_value: 'user-linked', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2025-12-17 10:00:00.000', last_seen_at: '2025-12-17 10:00:00.000', first_seen_event_id: 'evt-flagged', load_tstamp: '2025-12-19 11:00:00.000', decision_reasons: ['merge_limit_exceeded'], has_healthy_sighting: true}
-          - {id_key: 'k_degraded', snowplow_id: 'sp_DEGRADED', id_type: 'domain_userid', id_value: 'user-linked', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2025-12-18 10:00:00.000', last_seen_at: '2025-12-19 10:00:00.000', first_seen_event_id: 'evt-degraded', load_tstamp: '2025-12-19 11:00:00.000', decision_reasons: ['degraded_registry_only'], has_healthy_sighting: false}
+          - {id_key: 'k_degraded', snowplow_id: 'sp_DEGRADED', id_type: 'domain_userid', id_value: 'user-linked', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2025-12-18 10:00:00.000', last_seen_at: '2025-12-19 10:00:00.000', first_seen_event_id: 'evt-degraded', load_tstamp: '2025-12-19 11:00:00.000', decision_reasons: ['degraded_provisional'], has_healthy_sighting: false}
       - input: ref('snowplow_identities_snowplow_id_mapping')
         rows: []
       - input: ref('snowplow_identities_identities')
@@ -442,7 +442,7 @@ unit_tests:
       - input: ref('snowplow_identities_identifier_mapping_base')
         rows:
           - {id_key: 'k_healthy', snowplow_id: 'sp_HEALTHY', id_type: 'domain_userid', id_value: 'user-linked', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2025-12-17 10:00:00.000', last_seen_at: '2025-12-17 10:00:00.000', first_seen_event_id: 'evt-healthy', load_tstamp: '2025-12-19 11:00:00.000', decision_reasons: [], has_healthy_sighting: true}
-          - {id_key: 'k_degraded', snowplow_id: 'sp_DEGRADED', id_type: 'domain_userid', id_value: 'user-linked', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2025-12-18 10:00:00.000', last_seen_at: '2025-12-19 10:00:00.000', first_seen_event_id: 'evt-degraded', load_tstamp: '2025-12-19 11:00:00.000', decision_reasons: ['degraded_registry_only'], has_healthy_sighting: false}
+          - {id_key: 'k_degraded', snowplow_id: 'sp_DEGRADED', id_type: 'domain_userid', id_value: 'user-linked', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2025-12-18 10:00:00.000', last_seen_at: '2025-12-19 10:00:00.000', first_seen_event_id: 'evt-degraded', load_tstamp: '2025-12-19 11:00:00.000', decision_reasons: ['degraded_provisional'], has_healthy_sighting: false}
       - input: ref('snowplow_identities_snowplow_id_mapping')
         rows: []
       - input: ref('snowplow_identities_identities')
@@ -488,7 +488,7 @@ unit_tests:
     given:
       - input: ref('snowplow_identities_identifier_mapping_base')
         rows:
-          - {id_key: 'k_dlab', snowplow_id: 'sp_DLAB', id_type: 'domain_userid', id_value: 'user-linked', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2025-12-17 10:00:00.000', last_seen_at: '2025-12-17 10:00:00.000', first_seen_event_id: 'evt-dlab', load_tstamp: '2025-12-19 11:00:00.000', decision_reasons: ['degraded_registry_only', 'merge_limit_exceeded'], has_healthy_sighting: false}
+          - {id_key: 'k_dlab', snowplow_id: 'sp_DLAB', id_type: 'domain_userid', id_value: 'user-linked', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2025-12-17 10:00:00.000', last_seen_at: '2025-12-17 10:00:00.000', first_seen_event_id: 'evt-dlab', load_tstamp: '2025-12-19 11:00:00.000', decision_reasons: ['degraded_provisional', 'merge_limit_exceeded'], has_healthy_sighting: false}
           - {id_key: 'k_clean', snowplow_id: 'sp_CLEAN', id_type: 'domain_userid', id_value: 'user-linked', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2025-12-18 10:00:00.000', last_seen_at: '2025-12-19 10:00:00.000', first_seen_event_id: 'evt-clean', load_tstamp: '2025-12-19 11:00:00.000', decision_reasons: [], has_healthy_sighting: true}
       - input: ref('snowplow_identities_snowplow_id_mapping')
         rows: []

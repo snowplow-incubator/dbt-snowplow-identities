@@ -230,8 +230,8 @@ them and not only on the identifier the decision concerned.
 
 7. **An owner seen only through degraded sightings is never preferred by the heuristic.**
    `identifier_mapping_base` now records `has_healthy_sighting` per identifier row: whether
-   any event contributing it carried neither `degraded_registry_only` nor
-   `degraded_deterministic`. With `snowplow__merge_limit_collapse` on, the recency pick
+   any event contributing it carried neither `degraded_provisional` nor
+   `degraded_fallback`. With `snowplow__merge_limit_collapse` on, the recency pick
    skips an owner whose only ties to the identifier were degraded and prefers the next
    eligible owner; with no eligible owner, nothing is preferred. Such an owner still counts
    in `mapping_state`. Two exceptions keep this safe: an owner the service itself labelled

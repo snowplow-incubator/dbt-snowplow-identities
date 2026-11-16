@@ -193,7 +193,7 @@ Engine basis, unverified: `decision_reasons` comes from icecube PR #271, which i
 
 ### degraded_split
 Batch 1: A created; its event `ed15f6b0` carries duid_DS_E with no reasons — a healthy sighting.
-Batch 2: B created; its only event `2843ba5d` carries duid_DS_E with `decision_reasons` `["degraded_registry_only"]`, so B is tied to the identifier by nothing but a degraded sighting.
+Batch 2: B created; its only event `2843ba5d` carries duid_DS_E with `decision_reasons` `["degraded_provisional"]`, so B is tied to the identifier by nothing but a degraded sighting.
 Config: no unique identifier. `snowplow__merge_limit_collapse` left at its default `false`.
 Tests: duid_DS_E is `multiple` under both owners and neither is preferred, and B still counts as an owner — degraded sightings affect eligibility for preference, not `identity_count` or `mapping_state`. With the collapse var at its default nothing is preferred for a `multiple` identifier anyway, so the eligibility rule itself is invisible here; what this scenario pins is that `has_healthy_sighting` flows batch-by-batch through the base model without disturbing the mapping. The pick itself — a degraded-only owner skipped in favour of the next eligible one when the var is on — is unit-tested (`degraded_owner_skipped_by_collapse_pick`).
 
