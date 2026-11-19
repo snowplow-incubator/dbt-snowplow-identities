@@ -37,6 +37,9 @@ Added
 - Run-window logging, replacing the manifest framework's `print_run_limits`.
 - `snowplow__lookback_days` (default 1), the overlap re-scanned each run for late-arriving
   data.
+- `snowplow__identities_app_id` (default `['snowplow-identities']`), an independent
+  app filter for identity service merge events. Set to `[]` to disable this filter;
+  `snowplow__app_id` continues to filter your applications' identity-context events.
 - `snowplow__partition_tstamp`, `snowplow__partition_tstamp_type` and
   `snowplow__partition_buffer_days`, for when `atomic.events` is partitioned on something
   other than `load_tstamp`.

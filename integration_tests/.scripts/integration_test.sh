@@ -38,6 +38,7 @@ for db in ${DATABASES[@]}; do
   do
     echo "snowplow-identities integration tests: Execute models - run $i/4"
     eval "dbt run --exclude snowplow_identities_events_stg --target $db" || exit 1;
+    dbt test --select snowplow_identities_snowplow_id_mapping snowplow_identities_identifier_mapping --target "$db" || exit 1
   done
 
   echo "snowplow-identities integration tests: Test models (merge limit collapse off)"
@@ -51,6 +52,7 @@ for db in ${DATABASES[@]}; do
   do
     echo "snowplow-identities integration tests: Execute models with merge limit collapse - run $i/4"
     eval "dbt run --exclude snowplow_identities_events_stg --vars '{snowplow__merge_limit_collapse: true}' --target $db" || exit 1;
+    dbt test --select snowplow_identities_snowplow_id_mapping snowplow_identities_identifier_mapping --vars '{snowplow__merge_limit_collapse: true}' --target "$db" || exit 1
   done
 
   echo "snowplow-identities integration tests: Test models (merge limit collapse on)"

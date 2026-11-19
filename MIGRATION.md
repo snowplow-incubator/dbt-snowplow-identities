@@ -50,6 +50,7 @@ Config that is new:
 | Var | Default | What it does |
 | --- | --- | --- |
 | `snowplow__lookback_days` | 1 | Days of overlap re-scanned each run for late-arriving data. Also the run-twice idempotency window. |
+| `snowplow__identities_app_id` | `['snowplow-identities']` | Filters the identity service's merge events by `app_id`, independently of `snowplow__app_id`, which filters identity-context events from your applications. Set to `[]` to disable the merge-event app filter. |
 | `snowplow__partition_tstamp` | `load_tstamp` | The column `atomic.events` is physically partitioned by. Set to `collector_tstamp` if that is your partition key, so staging scans still prune. |
 | `snowplow__partition_tstamp_type` | `timestamp` | `timestamp` or `date`, matching the above column's type. |
 | `snowplow__partition_buffer_days` | 2 | Extra days on the prune predicate to absorb collector-to-load lag. |
@@ -75,7 +76,10 @@ to drop them after validation.
 
 ### Upgrade steps
 
-1. **Bump the package version** in your `packages.yml`.
+1. **Pause scheduled jobs that select Identities, then bump the package version** in
+   your `packages.yml`. The startup check rejects runs until the package-scoped full
+   refresh in step 3 is complete. Keep these jobs paused during the upgrade and resume
+   them after the backfill and validation in step 3.
 
 2. **Back up the existing outputs and confirm source retention**, per
    [Rebuild the package on the first run](#rebuild-the-package-on-the-first-run).
