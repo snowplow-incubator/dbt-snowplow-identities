@@ -17,5 +17,5 @@ Each model asks its own table for the newest `load_tstamp` it already holds and 
 
 The window re-scans `snowplow__lookback_days` of overlap for late-arriving data; combined with each model's `unique_key` upsert, that makes re-running a batch a no-op, which is what replaces the manifest's crash-recovery guarantee.
 
-The normal window advances by `snowplow__backfill_limit_days`. Atomic readers extend it through the first eligible day after a gap; derived models extend it through their upstream watermark. The first-day lookup applies application and identity-context filters and can read source timestamps beyond the batch. See MIGRATION.md for scan-cost and late-arrival limits.
+The normal window advances by `snowplow__backfill_limit_days`. Atomic readers extend it through the first eligible day after a gap; derived models extend it through their upstream watermark. The first-day lookup applies application and identity-context filters and can read source timestamps beyond the batch. See how the model [processes periods without data](https://docs.snowplow.io/docs/modeling-your-data/modeling-your-data-with-dbt/dbt-models/dbt-identities-data-model/#process-periods-without-data) and [reprocesses backdated data](https://docs.snowplow.io/docs/modeling-your-data/modeling-your-data-with-dbt/dbt-models/dbt-identities-data-model/#reprocess-backdated-data).
 {% enddocs %}
