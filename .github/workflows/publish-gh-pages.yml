@@ -52,7 +52,8 @@ jobs:
       - name: Build documentation fixture
         run: |
           dbt seed --target snowflake --full-refresh
-          dbt run --target snowflake --full-refresh --vars '{snowplow__allow_refresh: true, snowplow__backfill_limit_days: 243}'
+          dbt run --target snowflake --select snowplow_identities_events_stg
+          dbt run --target snowflake --exclude snowplow_identities_events_stg --full-refresh --vars '{snowplow__backfill_limit_days: 243}'
       - name: Generate documentation
         run: |
           dbt docs generate --target snowflake \
