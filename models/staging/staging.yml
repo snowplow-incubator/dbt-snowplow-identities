@@ -1,0 +1,27 @@
+version: 2
+
+models:
+  - name: snowplow_identities_stg_identity_events
+    description: '{{ doc("table_stg_identity_events") }}'
+    columns:
+      - name: snowplow_id
+        description: 'The Snowplow identity ID from the event context.'
+        tests:
+          - not_null
+      - name: created_at
+        description: 'The identity creation timestamp taken from the identity context.'
+      - name: event_id
+        description: 'The event_id of the event carrying the identity context.'
+        tests:
+          - not_null
+          - unique
+      - name: app_id
+        description: 'The app_id of the event.'
+      - name: derived_tstamp
+        description: 'The derived_tstamp of the event.'
+      - name: collector_tstamp
+        description: 'The collector_tstamp of the event, used to dedupe repeated event_ids.'
+      - name: load_tstamp
+        description: 'The load_tstamp of the event. This model self-watermarks off its max.'
+        tests:
+          - not_null

@@ -1,7 +1,6 @@
--- Invariant: no row in identifier_mapping should point to a merged-away identity.
--- If active_snowplow_id appears as snowplow_id in snowplow_id_mapping,
--- that identity has been absorbed and the row is stale.
--- This test returns rows that violate the invariant (should return 0).
+-- Invariant: no identifier_mapping row should point at a merged-away identity. True by
+-- construction now that the view resolves at read time; kept as an end-to-end guard.
+-- Returns rows that violate the invariant (should return 0).
 
 select
     im.id_type,
