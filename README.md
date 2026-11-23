@@ -31,11 +31,9 @@ further details please refer to our [documentation site](https://docs.snowplow.i
 
 The easiest way to get started is to follow our [QuickStart guide](https://docs.snowplow.io/docs/modeling-your-data/modeling-your-data-with-dbt/dbt-quickstart/identities/).
 
-Upgrading from 0.1.0 is a breaking change. See [MIGRATION.md](MIGRATION.md) for the steps and
-for recipes rebuilding the tables this release removes.
+Version 0.2.0 includes breaking changes. Follow the [Identities migration guide](https://docs.snowplow.io/docs/modeling-your-data/modeling-your-data-with-dbt/migration-guides/identities/) to upgrade from 0.1.0 and rebuild the removed tables.
 
-The migration guide also documents the [pruned-chain limitation](MIGRATION.md#sparse-streams-and-delayed-merges)
-and [performance checks for large identity graphs](MIGRATION.md#benchmark-before-a-large-rollout).
+The model documentation covers [pruned merge payloads](https://docs.snowplow.io/docs/modeling-your-data/modeling-your-data-with-dbt/dbt-models/dbt-identities-data-model/#handle-pruned-merge-payloads) and [how to benchmark warehouse costs](https://docs.snowplow.io/docs/modeling-your-data/modeling-your-data-with-dbt/dbt-models/dbt-identities-data-model/#benchmark-warehouse-costs).
 
 ### Adapter support
 

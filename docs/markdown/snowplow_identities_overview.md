@@ -33,9 +33,7 @@ Two design choices are worth knowing about.
 
 ## Installation
 
-This branch describes the unreleased 0.2.0 candidate. Once released, install its tag in
-`packages.yml`, then run `dbt deps`. The published 0.1.0 package uses the previous model
-layout; follow MIGRATION.md when upgrading.
+For a new project, add the 0.2.0 tag to `packages.yml`, then run `dbt deps`. To upgrade from 0.1.0, follow the [Identities migration guide](https://docs.snowplow.io/docs/modeling-your-data/modeling-your-data-with-dbt/migration-guides/identities/).
 
 ```yaml
 packages:
