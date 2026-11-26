@@ -6,4 +6,5 @@ from {{ ref('snowplow_identities_identifier_mapping') }}
 where id_value not like '%SIC%'
   and id_value not like '%UIDC%'
   and id_value not like '%MTUID%'
+  and id_value not like '%MLUC%'
 {% endif %}

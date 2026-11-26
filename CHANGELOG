@@ -1,3 +1,21 @@
+snowplow_identities 0.2.1
+-------------------------
+Added
+- `mapping_state` value `merge_limited`, for an identifier held by several identities because
+  the service refused a merge at its cap.
+
+Changed
+- `is_preferred` now uses the reasons the identity service attaches to events (Enrich 6.14.0+
+  with Identities 1.2.0+). When the service refuses a merge at its cap, it names the identity
+  it linked the identifier to, and that identity's row is preferred.
+- With the default configuration this only adds preferred rows. Rows that were already
+  preferred stay preferred.
+- `snowplow__merge_limit_collapse: true` makes a best guess at the right identity when the
+  service gave no reason: the one seen most recently. The guess is only safe without a
+  configured unique identifier, so it now picks nothing for an identifier with a unique-identifier
+  conflict. It also never picks an identity seen only in degraded answers.
+- Run a full refresh to apply this to events loaded before the upgrade.
+
 snowplow_identities 0.2.0 (2026-11-23)
 ---------------------------------------
 See MIGRATION.md for upgrade steps and rebuild recipes for the removed tables.

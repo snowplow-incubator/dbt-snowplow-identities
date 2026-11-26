@@ -93,6 +93,13 @@ def is_timestamp(column):
     return column.endswith(("_at", "_tstamp"))
 
 
+BASE_COLUMN_TYPES = {"decision_reasons": "varchar[]", "has_healthy_sighting": "boolean"}
+
+
+def column_type(column):
+    return BASE_COLUMN_TYPES.get(column, "timestamp" if is_timestamp(column) else "varchar")
+
+
 def fixture_table(connection, fixture):
     name = "historical" if fixture["input"] == "this" else fixture["input"].split("'")[1]
     if fixture.get("format") == "sql":
@@ -104,8 +111,10 @@ def fixture_table(connection, fixture):
     columns = {key for row in rows for key in row}
     columns |= {"snowplow_id", "active_snowplow_id", "created_at", "merged_at", "model_tstamp"}
     columns |= {"uuid", "id_type", "id_value", "first_app_id", "last_app_id", "first_seen_at", "last_seen_at", "first_seen_event_id"}
+    if "identifier_mapping_base" in fixture["input"]:
+        columns |= set(BASE_COLUMN_TYPES)
     columns = sorted(columns)
-    definition = ", ".join(f"{col} {'timestamp' if is_timestamp(col) else 'varchar'}" for col in columns)
+    definition = ", ".join(f"{col} {column_type(col)}" for col in columns)
     connection.execute(f"create table {name} ({definition})")
     if rows:
         connection.executemany(
@@ -169,7 +178,7 @@ def test_identity_extraction_handles_empty_and_null_contexts():
         rows = connection.execute(duck_sql(
             "select event_id, " + fields + " from snowplow_identities_base_events_this_run order by event_id"
         )).fetchall()
-        assert rows == [("evt_0", "sp_first", timestamp.replace(tzinfo=datetime.timezone.utc)), ("evt_1", None, None), ("evt_2", None, None)]
+        assert rows == [("evt_0", "sp_first", timestamp.replace(tzinfo=datetime.timezone.utc), None), ("evt_1", None, None, None), ("evt_2", None, None, None)]
 
 
 def test_merge_extraction_preserves_children_and_deduplicates_events():
