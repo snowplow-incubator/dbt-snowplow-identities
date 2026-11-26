@@ -337,6 +337,9 @@ unit_tests:
       label proves a past refusal but not a current home and the previous behaviour
       stands: multiple, nobody preferred.
     model: snowplow_identities_identifier_mapping
+    overrides:
+      vars:
+        snowplow__merge_limit_collapse: false
     given:
       - input: ref('snowplow_identities_identifier_mapping_base')
         rows:
@@ -379,8 +382,8 @@ unit_tests:
     description: >
       One owner hit the cap and another holds a conflicting unique identifier. The two
       reasons describe incompatible situations, and a unique identifier is exactly the
-      configuration under which collapsing an identifier onto one owner is unsafe, so the
-      merge limit reason does not get to decide. The previous behaviour stands.
+      configuration under which collapsing an identifier onto one owner is unsafe, so
+      neither the merge limit reason nor the collapse heuristic picks an owner.
     model: snowplow_identities_identifier_mapping
     overrides:
       vars:
@@ -399,7 +402,7 @@ unit_tests:
     expect:
       rows:
         - {active_snowplow_id: 'sp_FLAGGED', id_type: 'domain_userid', id_value: 'user-linked', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2025-12-17 10:00:00.000', last_seen_at: '2025-12-17 10:00:00.000', first_seen_event_id: 'evt-flagged', mapping_state: 'multiple', is_preferred: false}
-        - {active_snowplow_id: 'sp_UNIQUE', id_type: 'domain_userid', id_value: 'user-linked', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2025-12-18 10:00:00.000', last_seen_at: '2025-12-19 10:00:00.000', first_seen_event_id: 'evt-unique', mapping_state: 'multiple', is_preferred: true}
+        - {active_snowplow_id: 'sp_UNIQUE', id_type: 'domain_userid', id_value: 'user-linked', first_app_id: 'web', last_app_id: 'web', first_seen_at: '2025-12-18 10:00:00.000', last_seen_at: '2025-12-19 10:00:00.000', first_seen_event_id: 'evt-unique', mapping_state: 'multiple', is_preferred: false}
 
   # The cases below exercise has_healthy_sighting from the base model. An owner tied to an
   # identifier only through degraded sightings, with no merge_limit label of its own, may

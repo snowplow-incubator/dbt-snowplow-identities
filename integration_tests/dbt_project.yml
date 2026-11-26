@@ -6,7 +6,7 @@ profile: 'integration_tests'
 
 dispatch:
   - macro_namespace: dbt
-    search_order: ['snowplow_utils', 'dbt']
+    search_order: ['snowplow_identities_integration_tests', 'snowplow_utils', 'dbt']
 
 model-paths:
   - models

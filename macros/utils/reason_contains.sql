@@ -23,3 +23,7 @@ You may obtain a copy of the Snowplow Personal and Academic License Version 1.0 
 {% macro bigquery__reason_contains(col, value) %}
   coalesce('{{ value }}' in unnest({{ col }}), false)
 {%- endmacro -%}
+
+{% macro spark__reason_contains(col, value) %}
+  coalesce(array_contains({{ col }}, '{{ value }}'), false)
+{%- endmacro -%}

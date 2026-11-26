@@ -192,6 +192,7 @@ select
         when merge_limited_owners = 1 and unique_conflict_owners = 0 then owner_merge_limited = 1
         when chained_collapse = 1 then is_oldest_labelled = 1
         {%- if var('snowplow__merge_limit_collapse', false) %}
+        when unique_conflict_owners > 0 then false
         when undated_count > 0 or tied_count > 1 then false
         else owner_eligible = 1 and eligible_rank = 1 and eligible_tied_count = 1
         {%- else %}

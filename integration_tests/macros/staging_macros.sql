@@ -79,7 +79,7 @@ select
     load_tstamp,
     from_json(
         contexts_com_snowplowanalytics_snowplow_identity_2,
-        'array<struct<snowplow_id:string,created_at:timestamp>>'
+        'array<struct<snowplow_id:string,created_at:timestamp,decision_reasons:array<string>>>'
     ) as contexts_com_snowplowanalytics_snowplow_identity_2,
     from_json(
         unstruct_event_com_snowplowanalytics_snowplow_identity_merge_2,

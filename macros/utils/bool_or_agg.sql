@@ -23,3 +23,7 @@ You may obtain a copy of the Snowplow Personal and Academic License Version 1.0 
 {% macro bigquery__bool_or_agg(expr) %}
   logical_or({{ expr }})
 {%- endmacro -%}
+
+{% macro spark__bool_or_agg(expr) %}
+  bool_or({{ expr }})
+{%- endmacro -%}

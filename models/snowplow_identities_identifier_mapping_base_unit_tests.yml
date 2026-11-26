@@ -122,7 +122,8 @@ unit_tests:
         - {snowplow_id: 'sp_AAAA', id_type: 'domain_userid', id_value: 'user-aaa', first_app_id: 'web', last_app_id: 'mobile', first_seen_at: '2025-12-15 10:00:00.000', last_seen_at: '2025-12-17 10:00:00.000', first_seen_event_id: 'evt-mon', load_tstamp: '2025-12-17 11:00:00.000'}
 
   # The three cases below carry decision_reasons, an array. A yaml list renders as a
-  # square-bracket array literal, which every supported warehouse parses.
+  # square-bracket array literal; the integration project renders it as array(...) on
+  # Databricks.
 
   - name: test__snowplow_identities_identifier_mapping_base__reason_survives_an_unflagged_event
     description: >

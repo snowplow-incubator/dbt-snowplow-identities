@@ -28,6 +28,10 @@ You may obtain a copy of the Snowplow Personal and Academic License Version 1.0 
   array(select distinct x from unnest(array_concat(ifnull({{ a }}, []), ifnull({{ b }}, []))) as x order by x)
 {%- endmacro -%}
 
+{% macro spark__array_union(a, b) %}
+  array_sort(array_distinct(concat(coalesce({{ a }}, cast(array() as array<string>)), coalesce({{ b }}, cast(array() as array<string>)))))
+{%- endmacro -%}
+
 {#
   The array type to cast a null to when the stored side of a union is not there yet. A
   bare null has no type on BigQuery, so the concat it feeds cannot resolve its element
@@ -41,6 +45,8 @@ You may obtain a copy of the Snowplow Personal and Academic License Version 1.0 
 {% macro snowflake__reason_array_type() %}array{%- endmacro -%}
 
 {% macro bigquery__reason_array_type() %}array<string>{%- endmacro -%}
+
+{% macro spark__reason_array_type() %}array<string>{%- endmacro -%}
 
 {% macro array_concat_agg(col) %}
   {{ return(adapter.dispatch('array_concat_agg', 'snowplow_identities')(col)) }}
@@ -56,6 +62,10 @@ You may obtain a copy of the Snowplow Personal and Academic License Version 1.0 
   array_concat_agg({{ col }})
 {%- endmacro -%}
 
+{% macro spark__array_concat_agg(col) %}
+  flatten(collect_list(coalesce({{ col }}, cast(array() as array<string>))))
+{%- endmacro -%}
+
 {% macro array_sort_distinct(col) %}
   {{ return(adapter.dispatch('array_sort_distinct', 'snowplow_identities')(col)) }}
 {%- endmacro -%}
@@ -67,4 +77,8 @@ You may obtain a copy of the Snowplow Personal and Academic License Version 1.0 
 {#- unnest of a null array yields no rows, so a null input becomes an empty array. -#}
 {% macro bigquery__array_sort_distinct(col) %}
   array(select distinct x from unnest({{ col }}) as x order by x)
+{%- endmacro -%}
+
+{% macro spark__array_sort_distinct(col) %}
+  array_sort(array_distinct(coalesce({{ col }}, cast(array() as array<string>))))
 {%- endmacro -%}
